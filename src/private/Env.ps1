@@ -1,5 +1,4 @@
-Import-Module "$PSScriptRoot/../SysKit.psm1"
-
+Import-Module .\src\private\Utils.ps1
 function Set-Env {
 	param (
 		[Parameter(Mandatory = $true)]
@@ -11,24 +10,11 @@ function Set-Env {
 		[ValidateSet('User', 'Machine')]
 		[string]$Scope = 'User',
 
+		[switch]$Force,
 		[switch]$WhatIf
 	)
 
-
-	if (-not (Test-Path -Path $Path -PathType Container)) {
-		if ($WhatIf) {
-			Write-Host "[WhatIf]: Creating path $Path"
-		}
-		else {
-			try {
-				New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop
-			}
-			catch {
-				Write-Error "Failed to create path: $Path"
-				return
-			}
-		}
-	}
+	New-ValidDir -Path $Path -Force:$Force -WhatIf:$WhatIf
 
 	if ($WhatIf) {
 		Write-Host "[WhatIf]: Setting environment variable $VarName to $Path"
@@ -36,18 +22,25 @@ function Set-Env {
 	}
 
 	Write-Debug "Setting environment variable $VarName to $Path with scope $Scope"
+
+	$existingValue = [Environment]::GetEnvironmentVariable($VarName, $Scope)
+	if ($existingValue -and -not $Force) {
+		Write-Host "$VarName already exists with value $existingValue. Use -Force to overwrite."
+		return
+	}
 	[Environment]::SetEnvironmentVariable($VarName, $Path, $Scope)
 }
 
 function Set-SystemFolders {
 	param (
-		[ValidateSet('User', 'Machine')]
-		[string]$Scope = 'User',
-		[switch]$WhatIf,
-		[switch]$Temp
+		[switch]$WhatIf
 	)
 	$shell = New-Object -ComObject WScript.Shell
-	$stratum = [System.Environment]::GetEnvironmentVariable('Stratum', $Scope)
+	$stratum = [System.Environment]::GetEnvironmentVariable("Stratum", "User")
+	if (-not $stratum) {
+		Write-Error "Stratum is not set. Please set it first."
+		return
+	}
 	
 	$folders = @{}
 	$folders["My Pictures"] = "Pictures"
@@ -60,14 +53,26 @@ function Set-SystemFolders {
 		"TMP"
 	)
 	
-	
 	foreach ($key in $folders.Keys) {
 		$fullPath = Join-Path $stratum $folders[$key]
+		New-ValidDir -Path $fullPath -WhatIf:$WhatIf
 		if ($WhatIf) {
 			Write-Host "[WhatIf]: Setting $key to $fullPath"
-  }
-		else {
-			$shell.RegWrite("HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\$key", $fullPath)
 		}
+		else {
+			$regPath = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\$key"
+			$oldPath = $shell.RegRead($regPath)
+			if ($oldPath -ne $fullPath) {
+				$shell.RegWrite($regPath, $fullPath)
+				Get-ChildItem -Path $oldPath -Recurse | Move-Item -Destination $fullPath
+			}
+			$shell.RegWrite($regPath, $fullPath)
+		}
+	}
+	
+	foreach ($item in $temp) {
+		$fullPath = Join-Path $stratum $item
+		New-ValidDir -Path $fullPath -WhatIf:$WhatIf
+		Set-Env -VarName $item -Path $fullPath -WhatIf:$WhatIf
 	}
 }
