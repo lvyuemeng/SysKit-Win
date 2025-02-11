@@ -1,4 +1,5 @@
 Import-Module .\src\private\Utils.ps1
+Import-Module .\src\private\ShellOp.ps1
 function Set-Env {
 	param (
 		[Parameter(Mandatory = $true)]
@@ -35,7 +36,6 @@ function Set-SystemFolders {
 	param (
 		[switch]$WhatIf
 	)
-	$shell = New-Object -ComObject WScript.Shell
 	$stratum = [System.Environment]::GetEnvironmentVariable("Stratum", "User")
 	if (-not $stratum) {
 		Write-Error "Stratum is not set. Please set it first."
@@ -55,19 +55,12 @@ function Set-SystemFolders {
 	
 	foreach ($key in $folders.Keys) {
 		$fullPath = Join-Path $stratum $folders[$key]
+		$regPath = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\$key"
+
 		New-ValidDir -Path $fullPath -WhatIf:$WhatIf
-		if ($WhatIf) {
-			Write-Host "[WhatIf]: Setting $key to $fullPath"
-		}
-		else {
-			$regPath = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\$key"
-			$oldPath = $shell.RegRead($regPath)
-			if ($oldPath -ne $fullPath) {
-				$shell.RegWrite($regPath, $fullPath)
-				Get-ChildItem -Path $oldPath -Recurse | Move-Item -Destination $fullPath
-			}
-			$shell.RegWrite($regPath, $fullPath)
-		}
+		Set-Reg -RegPath $regPath -target $fullPath -Action {
+			Get-ChildItem -Path $oldPath -Recurse | Move-Item -Destination $fullPath
+		} -WhatIf:$WhatIf
 	}
 	
 	foreach ($item in $temp) {
