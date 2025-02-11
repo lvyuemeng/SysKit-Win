@@ -3,8 +3,8 @@ Import-Module .\src\private\Utils.ps1
 function Set-MyEnv {
 	param (
 		[string]$EnvListPath = ".\src\static\EnvList.json",
-		[ValidateSet('User', 'Machine')]
-		[string]$Scope = 'User',
+		[switch]$Stratum,
+		[switch]$Force,
 		[switch]$WhatIf
 	)
 	
@@ -22,13 +22,13 @@ function Set-MyEnv {
 			Write-Host "$($envTable[$key])" -ForegroundColor Green
 		}
 		else {
-			Set-Env $key $envTable[$key] -WhatIf:$WhatIf -Scope $Scope
+			Set-Env $key $envTable[$key] -WhatIf:$WhatIf -Force:$Force
 		}
 	}
 	
-	if ($null -ne $Stratum) {
+	if ($Stratum) {
 		Write-Host "Caveat: " -ForegroundColor Red
-		Write-Host "Stratum is setting for Downloads, Music, Videos, and Desktop, TEMP, TMP."
+		Write-Host "Stratum is setting for Downloads, Music, Videos, and Desktop, TEMP, TMP. It will overwrite registry and move existing files."
 		
 		if ($WhatIf) {
 			Write-Host "[WhatIf]: Setting " -NoNewline
@@ -38,11 +38,9 @@ function Set-MyEnv {
 			return
 		}
 		if (Confirm) {
-			Set-Env Stratum $Stratum -WhatIf:$WhatIf -Scope $Scope
-			
-		}
-		else {
-			return
+			$path = Read-ValidPath "Enter Stratum path"
+			Set-Env -VarName "Stratum" -Path $path -WhatIf:$WhatIf
+			Set-SystemFolders -WhatIf:$WhatIf
 		}
 	}
 }
