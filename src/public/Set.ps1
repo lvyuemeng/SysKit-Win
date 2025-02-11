@@ -2,12 +2,16 @@ Import-Module .\src\private\Env.ps1
 Import-Module .\src\private\Utils.ps1
 function Set-MyEnv {
 	param (
-		[string]$EnvListPath = ".\src\static\EnvList.json",
+		[string]$EnvListPath = "$PSScriptRoot\..\static\EnvList.json",
 		[switch]$Stratum,
 		[switch]$Force,
 		[switch]$WhatIf
 	)
 	
+	if (-not (Test-Path $EnvListPath)) {
+		Write-Error "EnvList.json not found at $EnvListPath"
+		return
+	}
 	$envTable = Get-Json $EnvListPath
 	
 	foreach ($key in $envTable.Keys) {

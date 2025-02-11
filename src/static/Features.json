@@ -1,0 +1,6 @@
+{
+	"Features": [
+		"Microsoft-Windows-Subsystem-Linux",
+		"VirtualMachinePlatform"
+	]
+}
