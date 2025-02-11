@@ -2,7 +2,7 @@ Import-Module .\src\private\Env.ps1
 Import-Module .\src\private\Utils.ps1
 function Set-MyEnv {
 	param (
-		[string]$EnvListPath = "$PSScriptRoot\..\static\EnvList.json",
+		[string]$EnvListPath = "$Global:configDir\EnvList.json",
 		[switch]$Stratum,
 		[switch]$Force,
 		[switch]$WhatIf

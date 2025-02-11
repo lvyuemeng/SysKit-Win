@@ -7,6 +7,10 @@ function Initialize-Shell {
     return $global:ShellCache
 }
 
+<#
+.DESCRIPTION
+	Sets a registry key to a target value and runs an action after registry is written.
+#>
 function Set-Reg {
 	param(
 		[Parameter(Mandatory = $true)]
