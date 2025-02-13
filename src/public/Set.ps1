@@ -1,5 +1,3 @@
-Import-Module .\src\private\Env.ps1
-Import-Module .\src\private\Utils.ps1
 function Set-MyEnv {
 	param (
 		[switch]$Stratum,

@@ -1,5 +1,4 @@
-Import-Module .\src\private\Utils.ps1
-Import-Module .\src\private\ShellOp.ps1
+
 function Set-Env {
 	param (
 		[Parameter(Mandatory = $true)]
