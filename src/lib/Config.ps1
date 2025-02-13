@@ -7,4 +7,3 @@ $Global:Config = if (Test-Path $ConfigPath) {
 
 $Global:Schema = $Global:Config.Schema
 $Global:Features = $Global:Config.Features
-

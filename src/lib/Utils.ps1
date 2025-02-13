@@ -53,3 +53,24 @@ function New-ValidDir {
 		}
 	}
 }
+
+function TraverseJson {
+	param (
+		[Parameter(Mandatory = $true)]
+		[hashtable]$JsonObject,
+		[string]$parentPath = "",
+		# Action(path, value)
+		[Parameter(Mandatory = $true)]
+		[scriptblock]$Action
+	)
+
+	foreach ($key in $JsonObject.Keys) {
+		$curPath = if ($parentPath -eq '') { $key } else { Join-Path $parentPath $key }
+		if ($JsonObject[$key] -is [hashtable]) {
+			TraverseJson -JsonObject $JsonObject[$key] -parentPath $curPath -Action $Action
+		}
+		else {
+			$Action.Invoke($key, $curPath, $JsonObject[$key])
+		}
+	}
+}

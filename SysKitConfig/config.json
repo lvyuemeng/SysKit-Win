@@ -8,8 +8,7 @@
 			"AppGame": "",
 			"AppC": "",
 			"AppCx86": ""
-		},
-		"Stratum": ""
+		}
 	},
 	"Features": [
 		"Microsoft-Windows-Subsystem-Linux",

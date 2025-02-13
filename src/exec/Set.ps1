@@ -2,31 +2,33 @@ Import-Module .\src\private\Env.ps1
 Import-Module .\src\private\Utils.ps1
 function Set-MyEnv {
 	param (
-		[string]$EnvListPath = "$Global:configDir\EnvList.json",
 		[switch]$Stratum,
 		[switch]$Force,
 		[switch]$WhatIf
 	)
 	
-	if (-not (Test-Path $EnvListPath)) {
-		Write-Error "EnvList.json not found at $EnvListPath"
-		return
-	}
-	$envTable = Get-Json $EnvListPath
+	$Unified = "$HOME\Unified"
+
+	New-ValidDir -Path $Unified -Force:$Force -WhatIf:$WhatIf
 	
-	foreach ($key in $envTable.Keys) {
-		if (-not $envTable[$key]) {
+	TraverseJson -JsonObject $Global:Schema -Action {
+		param(
+			$key,
+			$path,
+			$value
+		)
+		if (-not $value) {
 			$path = Read-ValidPath "Empty. Please Enter path for $key"
-			$envTable[$key] = $path
 		}
 		if ($WhatIf) {
 			Write-Host "[WhatIf]: Setting " -NoNewline
 			Write-Host "$key" -ForegroundColor Yellow -NoNewline
 			Write-Host " to " -NoNewline
-			Write-Host "$($envTable[$key])" -ForegroundColor Green
+			Write-Host "$value" -ForegroundColor Green
 		}
 		else {
-			Set-Env $key $envTable[$key] -WhatIf:$WhatIf -Force:$Force
+			Set-Env $key $value -WhatIf:$WhatIf -Force:$Force
+			New-ValidDir -Path $value -Force:$Force -WhatIf:$WhatIf
 		}
 	}
 	
@@ -45,6 +47,7 @@ function Set-MyEnv {
 			$path = Read-ValidPath "Enter Stratum path"
 			Set-Env -VarName "Stratum" -Path $path -WhatIf:$WhatIf
 			Set-SystemFolders -WhatIf:$WhatIf
+			New-ValidDir -Path $Unified -WhatIf:$WhatIf
 		}
 	}
 }

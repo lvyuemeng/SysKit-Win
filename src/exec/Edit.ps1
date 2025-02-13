@@ -6,7 +6,7 @@ function Get-Config {
 	)
 
 	if ($Env:Shell) {
-		$Editors = @($Env:Shell) + $Editors
+		$Editors = @($Env:Editor) + $Editors
 	}
 	
 	foreach ($editor in $Editors) {
