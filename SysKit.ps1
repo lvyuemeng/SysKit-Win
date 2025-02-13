@@ -8,9 +8,7 @@ else {
 	$PSScriptRoot
 }
 
-ProjectRoot
-
-$Global:configDir = Join-Path $Global:ProjectRoot 'SysKitConfig'
+$Global:ConfigDir = Join-Path $Global:ProjectRoot 'SysKitConfig'
 
 function Main {
 	[CmdletBinding()]

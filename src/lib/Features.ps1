@@ -1,6 +1,5 @@
 function Initialize-Features {
 	param (
-		[string]$Path = "$PSScriptRoot\..\static\Features.json",
 		[switch]$WhatIf
 	)
 	
