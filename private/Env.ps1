@@ -1,5 +1,6 @@
 
 function Set-Env {
+	[CmdletBinding(SupportsShouldProcess)]
 	param (
 		[Parameter(Mandatory = $true)]
 		[string]$VarName,
@@ -16,7 +17,7 @@ function Set-Env {
 
 	New-ValidDir -Path $Path -Force:$Force -WhatIf:$WhatIf
 
-	if ($WhatIf) {
+	if (-not $PSCmdlet.ShouldProcess($VarName)) {
 		Write-Host "[WhatIf]: Setting environment variable $VarName to $Path"
 		return
 	}
@@ -25,13 +26,14 @@ function Set-Env {
 
 	$existingValue = [Environment]::GetEnvironmentVariable($VarName, $Scope)
 	if ($existingValue -and -not $Force) {
-		Write-Host "$VarName already exists with value $existingValue. Use -Force to overwrite."
+		Write-Warning "$VarName already exists with value $existingValue. Use -Force to overwrite."
 		return
 	}
 	[Environment]::SetEnvironmentVariable($VarName, $Path, $Scope)
 }
 
 function Set-SystemFolders {
+	[CmdletBinding(SupportsShouldProcess)]
 	param (
 		[switch]$WhatIf
 	)

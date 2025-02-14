@@ -1,4 +1,7 @@
 function Get-Config {
+	[CmdletBinding(SupportsShouldProcess)]
+	param ()
+
 	$Editors = @(
 		'code',
 		'nvim',
@@ -12,7 +15,15 @@ function Get-Config {
 	foreach ($editor in $Editors) {
 		$editorPath = Get-Command $editor -ErrorAction SilentlyContinue
 		if ($editorPath) {
-			& $editor $Global:ConfigPath
+			if ($PSCmdlet.ShouldProcess($editor)) {
+				& $editor $Global:ConfigPath
+			}
+			else {
+				Write-Host "Editing by $editor" 
+			}
+			return
 		}
 	}
+
+	Write-Warning "Editor not found"
 }

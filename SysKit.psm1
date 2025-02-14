@@ -5,7 +5,7 @@ $Global:ProjectRoot = if ($isExe) {
 	[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName | Split-Path -Parent
 }
 else {
-	"$PSScriptRoot\..\"
+	"$PSScriptRoot"
 }
 
 $Global:ConfigDir = Join-Path $Global:ProjectRoot 'SysKitConfig'

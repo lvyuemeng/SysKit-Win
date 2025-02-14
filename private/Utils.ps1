@@ -1,19 +1,19 @@
 function Read-Object {
-	param (
-		[Parameter(Mandatory = $true)]
-		[string]$Prompt,
-		[Parameter(Mandatory = $true)]
-		[scriptblock]$Validator
-	)
-	while ($true) {
-		$object = Read-Host $prompt
-		if ($Validator.Invoke($object)) {
-			return $object
-		}
-		else {
-			Write-Host "Invalid input. Please try again."
-		}
-	}
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Prompt,
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Validator
+    )
+    while ($true) {
+        $object = Read-Host $Prompt
+        if ($Validator.InvokeReturnAsIs(($object))) {
+            return $object
+        }
+        else {
+            Write-Host "Invalid input. Please try again."
+        }
+    }
 }
 
 function Read-ValidPath {
@@ -24,12 +24,9 @@ function Read-ValidPath {
 	return Read-Object -Prompt $prompt -Validator { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -Path $_ -IsValid -PathType Container) }
 }
 
-function Confirm {
-	$choice = Read-Host "Are you sure you want to continue? ([Yy]/[Nn])"
-	return $choice -match '^[Yy]$'
-}
 
 function New-ValidDir {
+	[CmdletBinding(SupportsShouldProcess)]
 	param (
 		[Parameter(Mandatory = $true)]
 		[string]$Path,
@@ -39,10 +36,8 @@ function New-ValidDir {
 	)
 	
 	if (-not (Test-Path -Path $Path -PathType Container)) {
-		if ($WhatIf) {
-			Write-Host "[WhatIf]: Creating path $Path"
-		}
-		else {
+		Write-Verbose "Creating directory: $Path"
+		if ($PSCmdlet.ShouldProcess($Path, "Create")) {
 			try {
 				New-Item -Path $Path -ItemType Directory -Force:$Force -ErrorAction Stop
 			}

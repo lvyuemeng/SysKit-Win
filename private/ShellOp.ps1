@@ -1,10 +1,10 @@
 $global:ShellCache = $null
 
 function Initialize-Shell {
-    if (-not $global:ShellCache) {
-        $global:ShellCache = New-Object -ComObject WScript.Shell
-    }
-    return $global:ShellCache
+	if (-not $global:ShellCache) {
+		$global:ShellCache = New-Object -ComObject WScript.Shell
+	}
+	return $global:ShellCache
 }
 
 <#
@@ -12,6 +12,7 @@ function Initialize-Shell {
 	Sets a registry key to a target value and runs an action after registry is written.
 #>
 function Set-Reg {
+	[CmdletBinding(SupportsShouldProcess)]
 	param(
 		[Parameter(Mandatory = $true)]
 		[string]$RegPath,
@@ -29,7 +30,7 @@ function Set-Reg {
 			Write-Host "$RegPath already exists with value $existingValue. Skipping."
 			return
 		}
-		if ($WhatIf) {
+		if (-not $PSCmdlet.ShouldProcess($RegPath)) {
 			Write-Host "[WhatIf]: Setting $RegPath to $target"
 			return
 		}
