@@ -18,4 +18,10 @@ InModuleScope SysKit {
 			Add-Features -WhatIf
 		}
 	}
+
+	Describe "New-Stratum" {
+		It "Set with Confirm" {
+			New-Stratum -WhatIf
+		}
+	}
 }

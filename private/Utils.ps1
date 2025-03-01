@@ -1,27 +1,40 @@
 function Read-Object {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Prompt,
-        [Parameter(Mandatory = $true)]
-        [scriptblock]$Validator
-    )
-    while ($true) {
-        $object = Read-Host $Prompt
-        if ($Validator.InvokeReturnAsIs(($object))) {
-            return $object
-        }
-        else {
-            Write-Host "Invalid input. Please try again."
-        }
-    }
+	param (
+		[Parameter(Mandatory = $true)]
+		[string]$Prompt,
+		[Parameter(Mandatory = $true)]
+		[scriptblock]$Validator
+	)
+	while ($true) {
+		$object = Read-Host $Prompt
+		if ($Validator.InvokeReturnAsIs(($object))) {
+			return $object
+		}
+		else {
+			Write-Host "Invalid input. Please try again."
+		}
+	}
 }
 
-function Read-ValidPath {
-	(
-		[Parameter(Mandatory = $true)]
-		[string]$prompt
+function Test-ValidPath {
+	param (
+		[Parameter(Mandatory = $true, Position = 0)]
+		[string]$Path
 	)
-	return Read-Object -Prompt $prompt -Validator { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -Path $_ -IsValid -PathType Container) }
+	if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+	Test-Path -Path $Path -IsValid -PathType Container
+}
+
+
+function Read-ValidPath {
+	param(
+		[Parameter(Mandatory = $true, Position = 0)]
+		[string]$Prompt
+	)
+	return Read-Object -Prompt $Prompt -Validator { 
+		param($Value)
+		Test-ValidPath -Path $Value
+	}
 }
 
 
@@ -68,4 +81,12 @@ function TraverseJson {
 			$Action.Invoke($key, $curPath, $JsonObject[$key])
 		}
 	}
+}
+
+function NormalizePath {
+	param (
+		[string]$Path
+	)
+
+	return $Path.Replace('/','\').Trim('\')
 }

@@ -12,6 +12,7 @@
 		}
 	},
 	"Stratum": "",
+	"TEMP":"",
 	"Features": [
 		"Microsoft-Windows-Subsystem-Linux",
 		"VirtualMachinePlatform"

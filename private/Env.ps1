@@ -44,10 +44,9 @@ function Set-SystemFolders {
 	}
 	
 	$folders = @{}
-	$folders["My Pictures"] = "Pictures"
 	$folders["My Music"] = "Music"
-	$folders["My Video"] = "Videos"
-	$folders["My Desktop"] = "Desktop"
+	$folders["My Video"] = "Video"
+	$folders["{374DE290-123F-4565-9164-39C4925E467B}"] = "Download"
 	
 	$temp = @(
 		"TEMP",
