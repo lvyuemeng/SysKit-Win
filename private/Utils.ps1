@@ -82,11 +82,3 @@ function TraverseJson {
 		}
 	}
 }
-
-function NormalizePath {
-	param (
-		[string]$Path
-	)
-
-	return $Path.Replace('/','\').Trim('\')
-}

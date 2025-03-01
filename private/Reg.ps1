@@ -1,183 +1,173 @@
-$DefaultRegPath = "HKCU\Environment"
+$DefaultRegPath = "HKCU:\Environment"
 
 function NameCheck {
-	param(
-		[string]$Name
-	)
-	$Name = $Name.ToUpper()
-	
-	if ($Name -eq "PATH") {
-		throw "Cannot set PATH directly. Use Add/Remove for modifications"
-	}
+    param([string]$Name)
+
+	$Name = $Name.toUpper()
+    if ($Name -eq "PATH") {
+        throw "Use Add/Remove for PATH modifications"
+    }
 }
 
-function SetReg {
-	[CmdletBinding(SupportsShouldProcess)]
-	param (
-		[Parameter(Mandatory)]
-		[string]$Name,
-		[Parameter(Mandatory)]
-		[string]$Value,
-		[string]$RegPath = $DefaultRegPath
-	)
-	
-	$RegPath = NormalizePath $RegPath
-	NameCheck -Name $Name
-	
-	$regArgs = @(
-		"add",
-		"`"$RegPath`"",
-		"/v",
-		"`"$Name`"",
-		"/t",
-		"REG_SZ",
-		"/d",
-		"`"$Value`"",
-		"/f"
-	)
-	
-	if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Set Value")) {
-		$process = Start-Process reg -ArgumentList $regArgs -Wait -PassThru -NoNewWindow
-		if ($process.ExitCode -ne 0) {
-			throw "Failed to set environment varable $RegPath\$Name to $Value (Error: $(process.ExitCode))"
-		}
-	}
+function Set-RegistryValue {
+    [CmdletBinding(SupportsShouldProcess)]
+    param (
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [Parameter(Mandatory)]
+        [string]$Value,
+        [string]$RegPath = $DefaultRegPath
+    )
+    
+    NameCheck -Name $Name
+
+    if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Set value")) {
+        try {
+            Set-ItemProperty -Path "$RegPath" -Name $Name -Value $Value -ErrorAction Stop
+        }
+        catch {
+            throw "Failed to set registry value: $_"
+        }
+    }
 }
 
-function RemoveReg {
-	[CmdletBinding(SupportsShouldProcess)]
-	param(
-		[Parameter(Mandatory)]
-		[string]$Name,
-		[string]$RegPath = $DefaultRegPath
-	)
+function Remove-RegistryValue {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [string]$RegPath = $DefaultRegPath
+    )
 
-	$RegPath = NormalizePath $RegPath
-	
-	NameCheck -Name $Name
+    NameCheck -Name $Name
 
-	$RegArgs = @(
-		"delete",
-		"`"$RegPath`"",
-		"/v",
-		"`"$Name`""
-	)
-	
-	if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Remove")) {
-		$process = Start-Process reg -ArgumentList $RegArgs -Wait -PassThru -NoNewWindow
-		if ($process.ExitCode -ne 0) {
-			throw "Failed to remove environment varable $RegPath\$Name (Error: $(process.ExitCode))"
-		}
-	}
+    if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Remove value")) {
+        try {
+            Remove-ItemProperty -Path "Registry::$RegPath" -Name $Name -ErrorAction Stop
+        }
+        catch {
+            throw "Failed to remove registry value: $_"
+        }
+    }
 }
 
-function QueryReg {
-	[CmdletBinding(SupportsShouldProcess)]
-	param (
-		[string]$Name,
-		[string]$RegPath = $DefaultRegPath
-	)
-	
-	$RegPath = NormalizePath $RegPath
-	
-	NameCheck -Name $Name
-	$regArgs = @("query", "`"$RegPath`"")
-	
-	if ($Name) {
-		$regArgs += @("/v", "`"$Name`"")
-	}
-	
-	$process = Start-Process reg -ArgumentList $RegArgs -Wait -PassThru -NoNewWindow -RedirectStandardOutput "Out-Null"
-	if ($process.ExitCode -ne 0) {
-		throw "Failed to query environment varable $RegPath\$Name (Error: $(process.ExitCode))"
-	}
-	
-	$process.StandardOutput | ForEach-Object {
-		if ($_ -match "^\s+(\w+)\s+REG_(EXPAND_SZ | SZ)\s+(.*)") {
-			[PSCustomObject]@{
-				Name  = $Matches[1]
-				Value = $Matches[3]
-				Path  = $RegPath
-			}
-		}
-	}
+function Get-RegistryValue {
+    [CmdletBinding()]
+    param (
+        [string]$Name,
+        [string]$RegPath = $DefaultRegPath
+    )
+    try {
+        if ($Name) {
+            Get-ItemProperty -Path "$RegPath" -Name $Name -ErrorAction Stop
+        }
+        else {
+            Get-ItemProperty -Path "$RegPath" -ErrorAction Stop
+        }
+    }
+    catch {
+        Write-Warning "Registry query failed: $_"
+        return $null
+    }
 }
 
-function AddReg {
-	[CmdletBinding(SupportsShouldProcess)]
-	param(
-		[Parameter(Mandatory)]
-		[string]$Name,
-		[Parameter(Mandatory)]
-		[ValidateScript({ Test-ValidPath -Path $_ })]
-		[string]$Value,
-		[string]$RegPath = $DefaultRegPath
-	)
-	
-	$RegPath = NormalizePath $RegPath
-	$OldValue = (QueryReg -Name $Name -RegPath $RegPath).Value
-	
-	if ($OldValue -split ";" -contains $Value) {
-		Write-Warning "$Value already exists in $RegPath\$Name"
-		return
-	}
+function Add-RegistryPathValue {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [Parameter(Mandatory)]
+        [ValidateScript({ Test-ValidPath -Path $_ })]
+        [string]$Value,
+        [string]$RegPath = $DefaultRegPath
+    )
+    
+    $current = Get-RegistryValue -Name $Name -RegPath $RegPath
 
-	$NewValue = if ($OldValue) { "$OldValue;$Value" } else { $Value }
-	
-	$regArgs = @(
-		"add",
-		"`"$RegPath`"",
-		"/v",
-		"$Name",
-		"/t",
-		"REG_SZ",
-		"/d",
-		"`"$NewValue`"",
-		"/f"
-	)
-	
-	if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Append Value")) {
-		$process = Start-Process reg -ArgumentList $RegArgs -Wait -PassThru -NoNewWindow
-		if ($process.ExitCode -ne 0) {
-			throw "Failed to add environment varable $RegPath\$Name (Error: $(process.ExitCode))"
-		}
-	}
+    if (-not $current) {
+        Set-RegistryValue -Name $Name -Value $Value -RegPath $RegPath
+        return
+    }
+
+    $values = $current.$Name -split ';'
+    if ($values -contains $Value) {
+        Write-Warning "'$Value' already exists in $RegPath\$Name"
+        return
+    }
+
+    $newValue = ($values + $Value) -join ';'
+    Set-RegistryValue -Name $Name -Value $newValue -RegPath $RegPath
 }
 
-function RemoveReg {
-	[CmdletBinding(SupportsShouldProcess)]
-	param(
-		[Parameter(Mandatory)]
-		[string]$Name,
-		[Parameter(Mandatory)]
-		[string]$Value,
-		[string]$RegPath = $DefaultRegPath
-	)
-	
-	$RegPath = NormalizePath $RegPath
-	$OldValue = (QueryReg -Name $Name -RegPath $RegPath).Value
-	
-	if (-not $OldValue -or -not ($OldValue -split ";" -contains $Value)) {
-		Write-Warning "$Value does not exist in $RegPath\$Name"
-		return
-	}
-	
-	$NewValue = ($OldValue -split ";" | Where-Object { $_ -ne $Value }) -join ";"
-	
-	$regArgs = @(
-		"add",
-		"`"$RegPath`"",
-		"/v",
-		"`"$Name`"",
-		"/t",
-		"REG_SZ",
-		"/d",
-		"`"$NewValue`"")
-	
-	if ($PSCmdlet.ShouldProcess("$RegPath\$Name", "Remove Value")) {
-		$process = Start-Process reg -ArgumentList $RegArgs -Wait -PassThru -NoNewWindow
-		if ($process.ExitCode -ne 0) {
-			throw "Failed to remove environment varable $RegPath\$Name (Error: $(process.ExitCode))"
-		}
-	}
+function Remove-RegistryPathValue {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [Parameter(Mandatory)]
+        [string]$ValuePattern,
+        [string]$RegPath = $DefaultRegPath,
+		[switch]$Force
+    )
+    
+    $current = Get-RegistryValue -Name $Name -RegPath $RegPath
+
+    if (-not $current) {
+        Write-Warning "Registry value $RegPath\$Name doesn't exist"
+        return
+    }
+
+    $allValues = $current.$Name -split ';'
+    $matchedValues = $allValues | Where-Object { $_ -like "*$ValuePattern*" }
+
+    if (-not $matchedValues) {
+        Write-Warning "No values matching pattern '*$ValuePattern*' found in $RegPath\$Name"
+        return
+    }
+
+    # Interactive selection
+    $selection = @()
+    if ($matchedValues.Count -gt 1) {
+        Write-Host "`nMultiple matches found:" -ForegroundColor Cyan
+        $matchedValues | ForEach-Object { 
+            "[$($matchedValues.IndexOf($_)+1)] $_" 
+        } | Out-Host
+
+        do {
+            $input = Read-Host "`nSelect numbers to delete (comma-separated, 'a' for all, 'q' to quit)"
+            if ($input -eq 'q') { return }
+            if ($input -eq 'a') { 
+                $selection = $matchedValues
+                break 
+            }
+            
+            $indexes = $input -split ',' | ForEach-Object { 
+                if ($_ -match '^\d+$') { [int]$_ - 1 }
+            } | Where-Object { $_ -ge 0 -and $_ -lt $matchedValues.Count }
+            
+            $selection = $matchedValues[$indexes] | Select-Object -Unique
+        } while (-not $selection)
+    }
+    else {
+        $selection = $matchedValues
+    }
+
+    # Confirmation
+    $shouldDelete = $Force
+    if (-not $shouldDelete) {
+        Write-Host "`nSelected for deletion:" -ForegroundColor Yellow
+        $selection | ForEach-Object { "• $_" } | Out-Host
+        
+        $confirmation = Read-Host "`nConfirm deletion? (y/n)"
+        $shouldDelete = $confirmation -eq 'y'
+    }
+
+    if ($shouldDelete) {
+        $newValue = ($allValues | Where-Object { $selection -notcontains $_ }) -join ';'
+        Set-RegistryValue -Name $Name -Value $newValue -RegPath $RegPath
+        Write-Host "Successfully removed $($selection.Count) entries." -ForegroundColor Green
+    }
+    else {
+        Write-Host "Deletion canceled." -ForegroundColor Gray
+    }
 }

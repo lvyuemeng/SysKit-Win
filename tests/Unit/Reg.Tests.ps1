@@ -6,16 +6,23 @@ BeforeDiscovery {
 }
 
 InModuleScope SysKit { 
-	Describe "Reg" {
+	Describe "Get-RegistryValue" {
 		It "Query Reg default" {
-			QueryReg > $null
+			$res = Get-RegistryValue
+			Write-Host $res
 		}
-		It "Query Reg Check Output" {
-			$res = QueryReg
-			$res | Should -Not -BeNullOrEmpty
-			Write-Output "Name: $($res.Name)"
-			Write-Output "Value: $($res.Value)"
-			Write-Output "Path: $($res.Path)"
+	}
+	Describe "Reg" {
+		It "Ops" {
+			Set-RegistryValue -Name "Tst" -Value "123"
+			$res = Get-RegistryValue -Name "Tst"
+			$res.Tst | Should -Be "123"
+			Add-RegistryPathValue -Name "Tst" -Value "456"
+			$res = Get-RegistryValue -Name "Tst"
+			$res.Tst | Should -Be "123;456"
+			Remove-RegistryPathValue -Name "Tst" -Value "456"
+			$res = Get-RegistryValue -Name "Tst"
+			$res.Tst | Should -Be "123"
 		}
 	}
 }
