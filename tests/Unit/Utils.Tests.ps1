@@ -12,10 +12,12 @@ InModuleScope SysKit {
 			$Prompt = "Enter name"
 			$Validator = { param($Value)
     -not [string]::IsNullOrWhiteSpace($Value) }
+
 			$object = Read-Object -Prompt $Prompt -Validator $Validator
 			$object | Should -Not -BeNullOrEmpty
 		}
 	}
+
 	Describe "TraverseJson" {
 		It "traverse correctly" {
 			Get-Module SysKit | Should -Not -BeNullOrEmpty

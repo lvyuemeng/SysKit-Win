@@ -1,19 +1,54 @@
+function Read-Selection {
+	param (
+		[Parameter(Mandatory, Position = 0)]
+		[array]$matchedValues
+	)
+	$selection = @()
+	if ($matchedValues.Count -gt 1) {
+		Write-Host "`nMultiple matches found:" -ForegroundColor Cyan
+		$matchedValues | ForEach-Object { 
+			"[$($matchedValues.IndexOf($_)+1)] $_" 
+		} | Out-Host
+
+		do {
+			$Value = Read-Host "`nSelect numbers to delete (comma-separated, 'a' for all, 'q' to quit)" 
+			if ($Value -eq 'q') { return }
+			if ($Value -eq 'a') { 
+				$selection = $matchedValues
+				break 
+			}
+            
+			$indexes = $Value -split ',' | ForEach-Object { 
+				if ($_ -match '^\d+$') { [int]$_ - 1 }
+			} | Where-Object { $_ -ge 0 -and $_ -lt $matchedValues.Count }
+            
+			$selection = $matchedValues[$indexes] | Select-Object -Unique
+		} while (-not $selection)
+	}
+	else {
+		$selection = $matchedValues
+	}
+	
+	return $selection
+}
 function Read-Object {
 	param (
-		[Parameter(Mandatory = $true)]
+		[Parameter(Mandatory, Position = 0)]
 		[string]$Prompt,
-		[Parameter(Mandatory = $true)]
+		[string]$ErrorMsg = "Invalid input. Please try again.",
+		[Parameter(Mandatory)]
 		[scriptblock]$Validator
 	)
-	while ($true) {
-		$object = Read-Host $Prompt
-		if ($Validator.InvokeReturnAsIs(($object))) {
-			return $object
+	do {
+		$Value = Read-Host $Prompt
+		try {
+			if ($Validator.InvokeReturnAsIs($Value)) { return $Value }
+			Write-Host $ErrorMsg
 		}
-		else {
-			Write-Host "Invalid input. Please try again."
+		catch {
+			Write-Host "$_" -ForegroundColor DarkRed
 		}
-	}
+	} while ($true)
 }
 
 function Test-ValidPath {
@@ -21,7 +56,6 @@ function Test-ValidPath {
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Path
 	)
-	if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
 	Test-Path -Path $Path -IsValid -PathType Container
 }
 
@@ -31,10 +65,12 @@ function Read-ValidPath {
 		[Parameter(Mandatory = $true, Position = 0)]
 		[string]$Prompt
 	)
-	return Read-Object -Prompt $Prompt -Validator { 
-		param($Value)
-		Test-ValidPath -Path $Value
-	}
+	return Read-Object -Prompt $Prompt -Validator [scriptblock]::Create(
+		{ 
+			param($Value)
+			Test-ValidPath -Path $Value
+		}
+	)
 }
 
 
