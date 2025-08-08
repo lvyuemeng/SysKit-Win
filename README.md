@@ -1,6 +1,9 @@
 ## SysKit
 
-A Basic System Kit for Windows System initiation and setup.
+This is a scripts set you may be interested.
+
+- Please inspect the code **before** execute it.
+- It will develop to a packed version if the development becomes mature.
 
 ## ⚖️ License
 
