@@ -23,10 +23,17 @@ $may_help = $args | Where-Object {
 
 if ($may_help) {
 	Write-Host $help_ctx
-	return
+	exit 0	
 }
 
-# --- Prepare ---
+# --- Install ---
+
+Write-Host "Installing scoop..."
+if (Get-Command "scoop" -ErrorAction SilentlyContinue) {
+	Write-Host "scoop already installed, updating..."
+	& scoop update
+	exit 0
+}
 
 $exp = switch ($req) {
 	"china" {
@@ -39,18 +46,9 @@ $exp = switch ($req) {
 		"Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression"
 	}
 }
-
-# --- Install ---
-
-Write-Host "Installing scoop..."
-if (Get-Command "scoop" -ErrorAction SilentlyContinue) {
-	Write-Host "scoop already installed, updating..."
-	& scoop update
-	return
-}
-
 # install scoop
-Invoke-Expression $exp
+# unrecover
+Invoke-Expression $exp -ErrorAction Stop
 
 # config repo/bucket
 & scoop config SCOOP_REPO "https://gitee.com/scoop-installer/scoop"
