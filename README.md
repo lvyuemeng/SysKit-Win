@@ -7,4 +7,4 @@ This is a scripts set you may be interested.
 
 ## ⚖️ License
 
-[Apache 2.0 License](/LICENSE-Apache) Or [MIT License](/LICENSE-MIT) - Copyright(C)
+[MIT License](/LICENSE-MIT) - Copyright(C)

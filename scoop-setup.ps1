@@ -52,9 +52,4 @@ Invoke-Expression $exp -ErrorAction Stop
 
 # config repo/bucket
 & scoop config SCOOP_REPO "https://gitee.com/scoop-installer/scoop"
-& scoop bucket add spc "https://gitee.com/wlzwme/scoop-proxy-cn.git"
-
-# update bucket spc
-& Set-Location "$env:USERPROFILE\scoop\buckets\spc"
-& git fetch -all && git checkout -b main origin/main
-
+& scoop bucket add easy-win https://gitee.com/easy-win/scoop-mirror
