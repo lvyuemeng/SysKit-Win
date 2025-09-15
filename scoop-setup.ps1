@@ -48,8 +48,13 @@ if ($may_help) {
 # --- change bucket ---
 function change_bucket {
 	param (
-		[string]$to
+		[string]$to,
+		[string[]]$from
 	)
+
+	$defaultFrom = "main", "extras", "versions", "nirsoft", "sysinternals", "php", "nerd-fonts", "nonportable", "java", "games"
+	
+	$fromRegex = ($defaultFrom + $from | Select-Object -Unique) -join '|'
 
 	Write-Host "Changing bucket name to '$to' in all installed apps..."
 	try {
@@ -61,8 +66,8 @@ function change_bucket {
 		
 		$installJsonFiles | ForEach-Object { 
 			$content = Get-Content -Path $_.FullName -Raw
-			$replacement = '"bucket": "' + $to + '"'
-			$content = $content -replace '"bucket": "(main|extras|versions|nirsoft|sysinternals|php|nerd-fonts|nonportable|java|games|scoop-cn)"', $replacement
+			$replace = '"bucket": "' + $to + '"'
+			$content = $content -replace "`"bucket`": `"(?:$fromRegex)`"", $replace
 			Set-Content -Path $_.FullName -Value $content
 		}
 		Write-Host "Bucket names updated."
@@ -76,9 +81,12 @@ function change_bucket {
 # --- set bucket proxy ---
 function set-bucket-proxy {
 	param(
-		[string]$proxyPrefix,
-		[string]$bucketName
+		[string]$bucketName,
+		[string]$proxyPrefix
 	)
+	$defaultProxy = "https://gh-proxy.com"
+	$proxyPrefix = if ([string]::IsNullOrWhiteSpace($setBucketProxy[1])) { $defaultProxy } else { $proxyPrefix }
+
 	if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 		Write-Error "Git is not installed or not in the PATH. Cannot set bucket proxies."
 		return
@@ -94,13 +102,16 @@ function set-bucket-proxy {
 			return
 		}
 		$bucketPath = "$env:USERPROFILE\scoop\buckets\$bucketName"
+		$proxyPrefix = $proxyPrefix.TrimEnd('/')
 		
 		if (Test-Path -Path $bucketPath -PathType Container) {
-			$newUrl = "$proxyPrefix/$bucketSource"
-			Write-Host "Changing '$bucketName' remote to '$newUrl'..."
-			& git -C $bucketPath remote set-url origin $newUrl
+			$normalSource = ($bucketSource -split '(?=https?://)')[-1]
+			$newSource = "$proxyPrefix/$normalSource"
+			Write-Host "Changing '$bucketName' remote to '$newSource'..."
+			& git -C $bucketPath remote set-url origin $newSource
 			Write-Host "Bucket remote URL has been updated."
-		} else {
+		}
+		else {
 			Write-Warning "Bucket '$bucketName' not found at '$bucketPath'. Please ensure the bucket is added before setting its proxy."
 		}
 	}
@@ -155,12 +166,13 @@ function install_scoop {
 	}
 }
 
-if ($setBucketProxy -and $setBucketProxy.Count -ge 2) {
-	$proxyPrefix = $setBucketProxy[0]
-	$bucketName = $setBucketProxy[1]
-	set-bucket-proxy -proxyPrefix $proxyPrefix -bucketName $bucketName
+if ($setBucketProxy -and $setBucketProxy.Count -le 2) {
+	$bucketName = $setBucketProxy[0]
+	$proxyPrefix = $setBucketProxy.Count -gt 1 ? $setBucketProxy[1] : $null
+	set-bucket-proxy  -bucketName $bucketName -proxyPrefix $proxyPrefix
 	exit 0
-} elseif ($setBucketProxy) {
+}
+elseif ($setBucketProxy) {
 	Write-Error "SetBucketProxy requires both proxy prefix and bucket name."
 	Write-Host "Usage: scoop-setup.ps1 -SetBucketProxy <proxy_prefix> <bucket_name>"
 	exit 1
