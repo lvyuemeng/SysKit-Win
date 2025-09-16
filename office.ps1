@@ -1,4 +1,3 @@
-# Thanks to `https://github.com/gravesoft` Support this script
 param (
 	[string]$dir,
 	[switch]$cache,
@@ -16,7 +15,7 @@ Thanks to `https://github.com/gravesoft` Support this script.
 Usuage: .\activation.ps1 [Options]
 
 Options:
-	-dir 	[path]								  default: none / current dir
+	-dir 	[path]								  default: current dir
 	-cache	[switch] Don't execute the installer. default: false
 
 Included Apps: Access, Excel, Lync, OneNote, Outlook, PowerPoint, Publisher, Word, OneDrive.
@@ -30,35 +29,31 @@ File size: C2R office installer files are unified. It means that for example, Of
 File version: Online installer always installs the latest Office version whereas the Offline version is often 5-6 months old and Office will need updates once installed.
 """
 
-$may_help = $args | Where-Object {
-	$_ -match "-(h|/?)|--help"
-}
+$all_args = @($PSBoundParameters.Values + $args)
 
-if ($may_help) {
+if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
 	Write-Host $help_ctx
-	exit 0	
+	exit 0
 }
 
 # --- installation ---
 # 
 $url = "https://c2rsetup.officeapps.live.com/c2r/download.aspx?ProductreleaseID=O365ProPlusRetail&platform=x64&language=en-us&version=O16GA"
 
-# $dir: Maybe<string> -> Maybe<Path>
-if ($dir) {
-	if (-not (Test-Path $dir -IsValid -PathType Container)) {
-		Write-Warning "Invalid directory: $dir"
-		exit 1
+try {
+	# $dir: Maybe<string> -> Maybe<Path>
+	$target = if ($dir) {
+		New-Item $dir -ItemType Directory -Force
+		Join-Path $dir "Officesetup.exe"
 	}
-	# $dir: Path
-	# unrecover error
-	Invoke-WebRequest $url -OutFile "$dir\Officesetup.exe" -UseBasicParsing -ErrorAction Stop
-} else {
-	# $dir: None
-	# unrecover error
-	Invoke-WebRequest $url -UseBasicParsing -OutFile "Officesetup.exe" -ErrorAction Stop
-}
+ else {
+		"Officesetup.exe"
+	}
 
-# must exist
-if (-Not $cache) {
-	& "$dir\Officesetup.exe"
+	Invoke-WebRequest $url -OutFile $target -UseBasicParsing -ErrorAction Stop
+	if (-not $cache) { & $target }
+}
+catch {
+	Write-Error "Installation failed: $_"
+	exit 1
 }

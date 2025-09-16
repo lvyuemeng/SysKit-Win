@@ -24,13 +24,11 @@ KMS38			Windows-10-11		Till the Year 2038	No
 Online KMS		Windows/Office		180 Days			Yes
 """
 
-$may_help = $args | Where-Object {
-	$_ -match "-(h|/?)|--help"
-}
+$all_args = @($PSBoundParameters.Values + $args)
 
-if ($may_help) {
+if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
 	Write-Host $help_ctx
-	exit 0	
+	exit 0
 }
 
 Invoke-RestMethod https://get.activated.win | Invoke-Expression

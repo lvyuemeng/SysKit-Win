@@ -26,23 +26,21 @@ Options:
 		This will change the bucket name within the install.json files of every legacy bucket apps.
 		Suitable for proxy bucket change.
 
-	-SetBucketProxy <proxy_prefix> <bucket>
+	-SetBucketProxy <bucket> <proxy_prefix>
 		This will change the Source of a specific bucket with proxy prefix.
 		Requires a valid git client in the PATH.
 		List by appending comma ",".
-		Example: scoop-setup.ps1 -SetBucketProxy "https://gh-proxy.com", "main"
+		Example: scoop-setup.ps1 -SetBucketProxy "main", "https://gh-proxy.com"
 
 "@
 
 $scoop_miss = "Please ensure Scoop is installed and available in your environment." 
 
-$may_help = $args | Where-Object {
-	$_ -match "^-(h|/?)|--help$"
-}
+$all_args = @($PSBoundParameters.Values + $args)
 
-if ($may_help) {
+if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
 	Write-Host $help_ctx
-	exit 0	
+	exit 0
 }
 
 # --- change bucket ---
