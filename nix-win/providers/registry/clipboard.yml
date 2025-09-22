@@ -1,0 +1,33 @@
+# Clipboard
+#
+defaults:
+  regPath: "HKCU:\\Software\\Microsoft\\Clipboard"
+  regType: "DWord"
+
+property:
+  # Enable or disable Clipboard History.
+  # When enabled, Windows saves multiple copied items to a history that can be
+  # accessed by pressing Win + V.
+  - name: "clipboard_history"
+    regProperty: "EnableClipboardHistory"
+    defaultValue: 1
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Sync clipboard content across devices signed in with the same Microsoft account.
+  # This setting requires both "clipboard_history" to be enabled and
+  # a Microsoft account to be logged in.
+  - name: "sync_clipboard_across_devices"
+    regProperty: "EnableSyncAcrossDevices"
+    defaultValue: 0
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Manage the maximum number of items in the clipboard history.
+  # The default is 25, and it can be changed to a custom number.
+  # The value is an integer.
+  - name: "clipboard_history_max_items"
+    regProperty: "MaxHistoryItems"
+    defaultValue: 25

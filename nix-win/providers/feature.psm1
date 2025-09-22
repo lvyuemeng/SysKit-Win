@@ -1,4 +1,4 @@
-function Invoke-WindowsFeatureProvider {
+function Invoke-WindowsFeature {
 	[CmdletBinding(SupportsShouldProcess = $true)]
 	param(
 		[parameter(Mandatory = $true)]
@@ -9,39 +9,38 @@ function Invoke-WindowsFeatureProvider {
 
 	foreach ($feature in $DesiredStates) {
 		$featureName = $feature.name
-		$desiredState = $feature.state # "enabled" or "disabled"
-		Write-Host "  Checking feature: $featureName"
+		$desiredState = [bool]$feature.state # "enabled" or "disabled"
+		Write-Debug "Checking feature: $featureName"
 
-		$currentFeature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
-		if (-not $currentFeature) {
-			Write-Error "    [ERROR] Feature '$featureName' not found."
+		$curFeature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
+		if (-not $curFeature) {
+			Write-Error "Feature '$featureName' not found."
 			continue
 		}
 
-		# State can be 'Enabled' or 'Disabled'
-		$isCorrectState = ($currentFeature.State.ToString().ToLower() -eq $desiredState)
+		$isDesired = ($desiredState -eq ($curFeature.State -eq "Enabled"))
 
-		if ($isCorrectState) {
-			Write-Host "    [OK] Feature is already $($desiredState)."
+		if ($isDesired) {
+			Write-Host "Feature is already $($desiredState)."
 		}
 		else {
-			Write-Warning "    [CHANGE] Feature '$featureName' is not in the desired state of '$($desiredState)'."
-			Write-Host "      Current: $($currentFeature.State)"
-			Write-Host "      Desired: $($desiredState)"
+			Write-Warning "Feature '$featureName' is not in the desired state of '$($desiredState)'."
+			Write-Debug "Current: $($curFeature.State)"
+			Write-Debug "Desired: $($desiredState)"
 
 			if ($PSCmdlet.ShouldProcess($featureName, "Set state to '$desiredState'")) {
 				try {
-					if ($desiredState -eq "enabled") {
+					if ($desiredState) {
 						Enable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart -All
 					}
 					else {
 						Disable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart
 					}
-					Write-Host "    [APPLIED] Successfully set '$featureName' to '$($desiredState)'." -ForegroundColor Green
-					Write-Warning "    A REBOOT may be required for this change to fully apply."
+					Write-Host "Successfully set '$featureName' to '$($desiredState)'." -ForegroundColor Green
+					Write-Warning "A REBOOT may be required for this change to fully apply."
 				}
 				catch {
-					throw "Failed to change state for '$featureName'. Error: $($_.Exception.Message)"
+					Write-Error "Failed to change state for '$featureName'. Error: $($_.Exception.Message)"
 				}
 			}
 		}

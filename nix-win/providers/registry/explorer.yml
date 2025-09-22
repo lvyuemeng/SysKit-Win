@@ -1,0 +1,91 @@
+# Explorer
+#
+defaults:
+  regPath: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"
+  regType: "DWord"
+
+property:
+  # Show hidden files and folders in File Explorer
+  - name: "show_hidden"
+    regProperty: "Hidden"
+    defaultValue: 2
+    valueMap:
+      "on": 1
+      "off": 2
+
+  # Show file name extensions (e.g., ".txt", ".jpg")
+  - name: "show_file_ext"
+    regProperty: "HideFileExt"
+    defaultValue: 1
+    valueMap:
+      "on": 0
+      "off": 1
+
+  # Taskbar size (affects icon size)
+  - name: "taskbar_size"
+    regProperty: "TaskbarSi"
+    defaultValue: 1
+    valueMap:
+      "small": 0
+      "medium": 1
+      "large": 2
+
+  # Open File Explorer to "This PC" or "Quick Access"
+  - name: "launch_to"
+    regProperty: "LaunchTo"
+    defaultValue: 1
+    valueMap:
+      "ThisPC": 1
+      "QuickAccess": 2
+
+  # Taskbar button grouping / combining behavior
+  - name: "taskbar_glom"
+    regProperty: "TaskbarGlomLevel"
+    defaultValue: 0
+    valueMap:
+      "always_combine": 0
+      "combine_when_full": 1
+      "never_combine": 2
+
+  # Show or hide "Network" in the navigation pane of File Explorer
+  - name: "show_network_in_pane"
+    regProperty: "NavPaneShowNetwork"
+    defaultValue: 0
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Show or hide the "Recycle Bin" on the desktop
+  # Note: This is an exception and needs a different registry path
+  - name: "show_recycle_bin"
+    regPath: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu"
+    regProperty: "{645FF040-5081-101B-9F08-00AA002F954E}"
+    defaultValue: 0
+    valueMap:
+      "on": 0
+      "off": 1
+
+  # Show or hide the status bar in File Explorer
+  - name: "show_status_bar"
+    regProperty: "ShowStatusBar"
+    defaultValue: 1
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Show or hide full path in the title bar of File Explorer
+  # Note: The registry value is 0 for on, and 1 for off.
+  - name: "show_full_path"
+    regProperty: "ShowFullPath"
+    defaultValue: 0
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Show or hide file type description in File Explorer details view
+  - name: "show_file_type_description"
+    regProperty: "ShowTypeOverlay"
+    defaultValue: 0
+    valueMap:
+      "on": 1
+      "off": 0

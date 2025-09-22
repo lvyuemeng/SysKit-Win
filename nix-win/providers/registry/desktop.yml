@@ -1,0 +1,72 @@
+# Desktop
+#
+defaults:
+  regPath: "HKCU:\\Control Panel\\Desktop"
+  regType: "String"
+
+property:
+  # Wallpaper fit mode (scaling behavior)
+  - name: "wallpaper_mode"
+    regProperty: "WallpaperStyle"
+    defaultValue: "10"
+    valueMap:
+      "fill": "10"
+      "fit": "6"
+      "stretch": "2"
+      "tile": "0"
+      "center": "0"
+      "span": "22"
+
+  # Text cursor blink rate (in milliseconds)
+  - name: "cursor_blink_rate"
+    regProperty: "CursorBlinkRate"
+    defaultValue: "530"
+
+  # Active Window Border Color (Note: This is a BGR hex string)
+  - name: "active_window_border_color"
+    regProperty: "ActiveBorder"
+    defaultValue: "B4CFEE"
+
+  # Active Window Title Bar Color (Note: This is a BGR hex string)
+  - name: "active_window_title_bar_color"
+    regProperty: "ActiveTitle"
+    defaultValue: "B4CFEE"
+
+  # Show accent color on Start, taskbar, and Action Center
+  - name: "accent_color"
+    regProperty: "ColorPrevalence"
+    regType: "DWord"
+    defaultValue: 1
+    valueMap:
+      "on": 1
+      "off": 0
+
+  # Menu Font Size (DWord value)
+  - name: "menu_font_size"
+    regProperty: "Menu"
+    regType: "DWord"
+    defaultValue: 9
+
+  # Title Bar Height (DWord value)
+  - name: "title_bar_height"
+    regProperty: "TitleBar"
+    regType: "DWord"
+    defaultValue: 25
+
+  # Icon Spacing (DWord value)
+  # A negative value in twips (1/1440 of an inch).
+  - name: "icon_spacing_horizontal"
+    regProperty: "IconSpacing"
+    regType: "DWord"
+    defaultValue: -1125
+
+  - name: "icon_spacing_vertical"
+    regProperty: "IconVerticalSpacing"
+    regType: "DWord"
+    defaultValue: -1125
+
+  # Screen Saver Timeout (DWord value in seconds)
+  - name: "screen_saver_timeout"
+    regProperty: "ScreenSaverTimeout"
+    regType: "DWord"
+    defaultValue: 600
