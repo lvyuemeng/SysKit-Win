@@ -7,7 +7,7 @@ param (
 
 # --- Help ---
 #
-$help_ctx = """
+$HELP_MSG = """
 This script will download **PlusRetail** online x64 Microsoft 365 installer.
 
 Thanks to `https://github.com/gravesoft` Support this script.
@@ -32,7 +32,7 @@ File version: Online installer always installs the latest Office version whereas
 $all_args = @($PSBoundParameters.Values + $args)
 
 if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
-	Write-Host $help_ctx
+	Write-Host $HELP_MSG
 	exit 0
 }
 

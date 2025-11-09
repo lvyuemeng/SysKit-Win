@@ -6,7 +6,7 @@ param (
 
 # --- Help ---
 
-$help_ctx = """
+$HELP_MSG = """
 This script will activate windows/office.
 
 Sincerely thanks to https://massgrave.dev Support. You may refer to it for more information.
@@ -27,7 +27,7 @@ Online KMS		Windows/Office		180 Days			Yes
 $all_args = @($PSBoundParameters.Values + $args)
 
 if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
-	Write-Host $help_ctx
+	Write-Host $HELP_MSG
 	exit 0
 }
 

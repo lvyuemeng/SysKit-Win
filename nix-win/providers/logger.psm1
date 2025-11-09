@@ -1,5 +1,4 @@
 function Write-Log {
-	[CmdletBinding(SupportsShouldProcess = $true)]
 	param (
 		[Parameter(Mandatory = $true)]
 		[string]$Level,
@@ -92,13 +91,11 @@ function Write-LogError {
 	[CmdletBinding()]
 	param (
 		[Parameter(Mandatory = $true)]
-		[string]$Name,
-		[Parameter(Mandatory = $false)]
-		[System.Exception]$Exception
+		[string]$Name
 	)
-	Write-Log -Level "[ERROR]" -Msg "Failed to set '$Name'."
-	if ($Exception) {
-		Write-Log -Level "[ERROR]" -Msg "$($Exception.Message)."
+	Write-Log -Level "ERROR" -Msg "Failed to set '$Name'."
+	if ($PSItem) {
+		Write-Log -Level "ERROR" -Msg "$($PSItem.Exception.Message)."
 	}
 }
 

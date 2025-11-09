@@ -5,7 +5,7 @@ param(
 
 # --- Help ---
 
-$help_ctx = @"
+$HELP_MSG = @"
 This script will execute Debloat script.
 
 Thanks to "https://github.com/Raphire/Win11Debloat/" support.
@@ -39,7 +39,7 @@ Options:
 $all_args = @($PSBoundParameters.Values + $args)
 
 if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
-	Write-Host $help_ctx
+	Write-Host $HELP_MSG
 	exit 0
 }
 
