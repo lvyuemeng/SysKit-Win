@@ -7,7 +7,7 @@ param (
 )
 
 # --- Helper ---
-$DEFAULT_PROXY = "https://gh-proxy.com"
+$DEFAULT_PROXY = "https://gh-proxy.org"
 
 $HELP_MSG = @"
 Scoop Setup and Management Tool
@@ -21,7 +21,7 @@ Commands:
 
 Examples:
   scoop-setup.ps1 install --source proxy
-  scoop-setup.ps1 bucket rename --to spc
+  scoop-setup.ps1 bucket resolve --to spc
   scoop-setup.ps1 bucket proxy --name main --url https://gh-proxy.com
 
 Install Options:
@@ -30,7 +30,7 @@ Install Options:
     'native'  - Use native source (https://get.scoop.sh)
 
 Bucket Options:
-  resolve --to <name>       Change bucket name in all installed apps
+  resolve --to <bucket> --from <bucket>  Change bucket resolution for installed apps
   proxy <bucket> --url <proxy>   Set proxy for specific bucket
 "@
 $SCOOP_MISS_MSG = "Please ensure Scoop is installed and available in your environment." 
@@ -79,15 +79,44 @@ function may_scoop_dir {
 	}
 }
 
+function resolve_bucket {
+	param(
+		[string]$bucketsRoot,
+		[string]$bucket
+	)
+	$bucketsTo = @()
+	Write-Debug "Resolving bucket: $bucket"
+	if ($bucket -eq '*') {
+		# Get all bucket directory names
+		Write-Host "Processing proxy for ALL installed buckets..." -ForegroundColor Yellow
+		$bucketsTo = Get-ChildItem -Path $bucketsRoot -Directory | Select-Object -ExpandProperty Name
+		if (-not $bucketsTo) {
+			Write-Warning "No buckets found in '$bucketsRoot'. Exiting."
+			return $null
+		}
+	}
+ else {
+		# Process a single specified bucket
+		$bucketPath = Join-Path $bucketsRoot $bucket
+		if (-not (Test-Path $bucketPath)) {
+			Write-Error "Bucket '$bucket' not found at: $bucketPath"
+			return
+		}
+		$bucketsTo = @($bucket)
+	}
+	
+	return $bucketsTo
+}
+
 function Install-Scoop {
 	param([string]$source = "proxy")
-    
-	Write-Host "Installing Scoop with source: $source..." -ForegroundColor Cyan
     
 	if (Get-Command "scoop" -ErrorAction SilentlyContinue) {
 		Write-Host "Scoop already installed." -ForegroundColor Yellow
 		return
 	}
+
+	Write-Host "Installing Scoop with source: $source..." -ForegroundColor Cyan
 
 	$installScript = switch ($source) {
 		"proxy" { 
@@ -120,6 +149,7 @@ function Install-Scoop {
 	}
 }
 
+
 function Set-ToBucket {
 	param(
 		[string]$To,
@@ -138,12 +168,9 @@ function Set-ToBucket {
 	Write-Host "Updating bucket names to '$To'..." -ForegroundColor Cyan
 
 	# escape regex metacharacters in bucket names
-	$escapedFrom = $From | ForEach-Object { 
-		[Regex]::Escape($_) 
-	}
-
-	# build regex like:  main|extras|versions ...
-	$fromRegex = ($escapedFrom | Select-Object -Unique) -join '|'
+	$fromRegex = ($From | ForEach-Object { 
+			[Regex]::Escape($_) 
+		} | Select-Object -Unique) -join '|'
 
 	try {
 		$installJsons = Get-ChildItem -Path (Join-Path $scoopDir "apps") -Recurse -Filter "install.json" -ErrorAction Stop
@@ -180,52 +207,59 @@ function Set-BucketProxy {
 		[string]$proxy
 	)
 
-	$useProxy = if ($proxy -ne "default") {
-		$true
-	} else {
-		$false
-	}
-
-	if ([string]::IsNullOrWhiteSpace($proxy)) {
-		$proxy = $DEFAULT_PROXY
-    }
-	$proxy = $proxy.TrimEnd('/')
-
 	$scoopDir = may_scoop_dir
 	if (-not $scoopDir) { return }
-
-	$bucketPath = Join-Path $scoopDir "buckets\$Bucket"
-	if (-not (Test-Path $bucketPath)) {
-		Write-Error "Bucket '$Bucket' not found at: $bucketPath"
-		return
-	}
 
 	if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 		Write-Error "Git is required but not found in PATH."
 		return
 	}
 
-	try {
-		# Get current remote URL
-		$curSource = git -C $bucketPath config --get remote.origin.url
-		Write-Host "Current remote URL: $curSource"
-        
-		# Construct new URL with proxy
-		$baseSource = ($curSource -split '(?=https?://)')[-1]
-		$newSource = if ($useProxy) {
-			Write-Host "Setting proxy for bucket '$bucket' to: $proxy" -ForegroundColor Cyan
-			"$proxy/$baseSource"
-		} else {
-			Write-Host "Recover bucket '$bucket'" -ForegroundColor Cyan
-			$baseSource
-		}
-        
-		Write-Host "New remote URL: $newSource"
-		git -C $bucketPath remote set-url origin $newSource
-		Write-Host "Bucket proxy updated successfully!" -ForegroundColor Green
+	$useProxy = if ($proxy -ne "default") {
+		$true
 	}
-	catch {
-		Write-Error "Failed to set bucket proxy: $_"
+ else {
+		$false
+	}
+
+	if ([string]::IsNullOrWhiteSpace($proxy)) {
+		$proxy = $DEFAULT_PROXY
+	}
+	$proxy = $proxy.TrimEnd('/')
+
+	$bucketsRoot = Join-Path $scoopDir "buckets"
+	$bucketsTo = resolve_bucket -bucketsRoot $bucketsRoot -bucket $bucket
+	if (-Not $bucketsTo) {
+		return 
+	}
+
+	foreach ($curBucket in $bucketsTo) {
+		$bucketPath = Join-Path $bucketsRoot $curBucket
+		
+		Write-Host "`n--- Processing Bucket: $curBucket ---" -ForegroundColor Yellow
+
+		try {
+			$curSource = git -C $bucketPath config --get remote.origin.url
+			Write-Host "Current remote URL: $curSource"
+			
+			$baseSource = ($curSource -split '(?=https?://)')[-1] 
+			
+			$newSource = if ($useProxy) {
+				Write-Host "Setting proxy for bucket '$curBucket' to: $proxy" -ForegroundColor Cyan
+				"$proxy/$baseSource"
+			}
+			else {
+				Write-Host "Recovering bucket '$curBucket' to original source" -ForegroundColor Cyan
+				$baseSource
+			}
+			
+			Write-Host "New remote URL: $newSource"
+			git -C $bucketPath remote set-url origin $newSource
+			Write-Host "Bucket proxy updated successfully for '$curBucket'!" -ForegroundColor Green
+		}
+		catch {
+			Write-Error "Failed to set bucket proxy for '$curBucket': $($_.Exception.Message)"
+		}
 	}
 }
 
@@ -235,7 +269,8 @@ function Invoke-MainCommand {
     
 	switch -Regex ($Command) {
 		"install" {
-			Install-Scoop -source $argsMap["_0"]
+			$source = [string]($argsMap["_0"] ?? $argsMap["s"] ?? $argsMap["source"])
+			Install-Scoop -source $source
 		}
 		"bucket" {
 			$subCommand = $argsMap["_0"]
@@ -244,6 +279,7 @@ function Invoke-MainCommand {
 					Set-ToBucket -To $argsMap["to"] -From $argsMap["from"]
 				}
 				"proxy" {
+					Write-Debug "argsMap: $($argsMap | Out-String)"
 					Set-BucketProxy -bucket $argsMap["_1"] -proxy $argsMap["url"]
 				}
 				default {
