@@ -1,34 +1,30 @@
-# Thanks to `https://github.com/massgravel/Microsoft-Activation-Scripts` Support this script
-param (
-	[Parameter(ValueFromRemainingArguments = $true)]
-	[string[]]$args
+<#
+.SYNOPSIS
+    Activates Windows and/or Office.
+
+.DESCRIPTION
+    Downloads and executes the Microsoft Activation Scripts from https://get.activated.win
+    All arguments are passed through to the remote activation script.
+
+.PARAMETER args
+    Additional arguments passed to the remote activation script.
+
+.EXAMPLE
+    .\activation.ps1
+    Runs the default activation method (HWID)
+
+.EXAMPLE
+    .\activation.ps1 -KMS38
+    Uses KMS38 activation method
+
+.NOTES
+    Thanks to https://massgrave.dev for the activation scripts.
+#>
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$args
 )
 
-# --- Help ---
-
-$HELP_MSG = """
-This script will activate windows/office.
-
-Sincerely thanks to https://massgrave.dev Support. You may refer to it for more information.
-
-Activation-Type	Supported-Product	Activation-Period	Is-Internet-Needed?
-
-HWID			Windows-10-11		Permanent			Yes
-
-Ohook			Office				Permanent			No
-
-TSforge			Windows/ESU/Office	Permanent			Yes, needed on build 19041 and later
-
-KMS38			Windows-10-11		Till the Year 2038	No
-
-Online KMS		Windows/Office		180 Days			Yes
-"""
-
-$all_args = @($PSBoundParameters.Values + $args)
-
-if ($all_args -match '^(?:-h|-\?|/\?|--help)$') {
-	Write-Host $HELP_MSG
-	exit 0
-}
+$ErrorActionPreference = 'Stop'
 
 Invoke-RestMethod https://get.activated.win | Invoke-Expression
