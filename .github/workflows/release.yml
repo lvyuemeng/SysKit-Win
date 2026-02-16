@@ -1,0 +1,57 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          # Keep 'v' prefix in version
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: WinSpec ${{ steps.get_version.outputs.VERSION }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-rc') || contains(steps.get_version.outputs.VERSION, '-beta') || contains(steps.get_version.outputs.VERSION, '-alpha') }}
+
+      - name: Update Scoop manifest
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+          
+          # Update winspec.json using jq
+          jq --arg version "$VERSION" \
+             --arg url "https://github.com/lvyuemeng/winspec/archive/refs/tags/$VERSION.zip" \
+             --arg extract_dir "winspec-$VERSION" \
+             '.version = $version | .url = $url | .extract_dir = $extract_dir' \
+             winspec.json > winspec.json.tmp && mv winspec.json.tmp winspec.json
+
+      - name: Commit updated manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add winspec.json
+          git commit -m "chore: update scoop manifest for ${{ steps.get_version.outputs.VERSION }}" || echo "No changes to commit"
+          
+      - name: Push changes
+        run: |
+          # Push to master branch with full refname
+          git push origin HEAD:refs/heads/master

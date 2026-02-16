@@ -1,192 +1,325 @@
-# SysKit
+# WinSpec
 
-A collection of PowerShell scripts for Windows system management.
-
-**Warning**: Please inspect the code before executing any script.
+> A composable, declarative Windows configuration system.
 
 ---
 
-## Quick Start
+## Motivation
 
-Execute any script directly:
+Managing Windows configuration has traditionally been fragmented across multiple tools, scripts, and manual processes. Users often find themselves:
 
-### System Tools
+- **Juggling multiple tools**: PowerShell scripts, registry editors, package managers, and various utilities scattered across different contexts
+- **Lacking reproducibility**: Manual configuration changes are hard to track, reproduce, or share across machines
+- **No clear separation of concerns**: Mixing idempotent state management with one-time actions leads to unpredictable results
+- **External dependencies**: Configuration tools often require YAML parsers, JSON schemas, or other non-native dependencies
 
-Gathering several project for simplicity:
+**WinSpec** solves these problems by providing:
 
-```powershell
-# Download Office 365 installer
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/office.ps1"))) -dir C:\Installers
-
-# Execute Windows debloat
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/debloat.ps1"))) -Silent -CreateRestorePoint
-
-# Activate Windows/Office
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/activation.ps1")))
-```
-
-### Scoop Management
-
-```powershell
-# Install Scoop with proxy
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/scoop-install.ps1"))) -Source proxy
-
-# Resolve bucket references to spc
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/scoop-resolve.ps1"))) -To spc
-
-# Set bucket proxy
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/scoop-proxy.ps1"))) -Bucket main -Url https://gh-proxy.org
-```
+- **Unified architecture**: All Windows configuration in one cohesive system
+- **PowerShell-native configuration**: No YAML, no JSON - just native PowerShell hashtables
+- **Clear provider taxonomy**: Declarative (idempotent) vs Trigger (one-time) actions are explicitly separated
+- **Composable specifications**: Import and merge configurations for modular, reusable setups
+- **Zero external dependencies**: Pure PowerShell implementation works out of the box
 
 ---
 
-## System Tools
+## Introduction
 
-### office.ps1
+**WinSpec** (Windows Specification) is a unified, composable architecture for managing Windows system configuration. Configuration is expressed in native PowerShell data structures, enabling full PowerShell ecosystem integration.
 
-Downloads Microsoft Office 365 PlusRetail installer.
+### Design Principles
 
-**Parameters**:
-- `-dir <path>`: Target directory (default: current directory)
-- `-cache`: Download only, do not execute
+| Principle | Description |
+|-----------|-------------|
+| **Native** | Configuration in PowerShell (`.ps1`), not YAML or JSON |
+| **Grouped** | Directories only when necessary for organization |
+| **Composable** | Import and merge specifications for modularity |
+| **Idempotent** | Declarative state management - safe to run multiple times |
+| **Triggerable** | One-time actions via explicit triggers |
 
-**Usage**:
-```powershell
-.\office.ps1 -dir C:\Installers    # Download and execute
-.\office.ps1 -cache                # Download only
-```
+### Provider Types
 
----
+WinSpec distinguishes between two types of providers:
 
-### debloat.ps1
+| Type | Characteristics | Idempotent | Examples |
+|------|-----------------|------------|----------|
+| **Declarative** | State-based, testable | Yes | Registry, Service, Feature, Package |
+| **Trigger** | Action-based, fire-and-forget | No | Activation, Debloat, Office |
 
-Executes Windows debloat script from Win11Debloat.
+**Declarative providers** let you specify *what state* you want. Running multiple times produces the same result - the engine tests current state, calculates diff, and applies only needed changes.
 
-**Usage**:
-```powershell
-.\debloat.ps1 -Silent -CreateRestorePoint    # Silent mode with restore point
-.\debloat.ps1 -RemoveApps                     # Remove default apps
-```
-
-All parameters are passed through to the remote debloat script.
-
----
-
-### activation.ps1
-
-Activates Windows and/or Office using Microsoft Activation Scripts.
-
-**Usage**:
-```powershell
-.\activation.ps1              # Default (HWID)
-.\activation.ps1 -KMS38       # KMS38 method
-```
-
-All arguments are passed through to the remote activation script.
-
----
-
-## Scoop Management
-
-### scoop-install.ps1
-
-Installs Scoop package manager.
-
-**Parameters**:
-- `-Source proxy` (default): Install with proxy configuration
-- `-Source native`: Install via official Scoop installer
-
-**Usage**:
-```powershell
-.\scoop-install.ps1 -Source proxy    # Install with proxy, configure spc bucket
-.\scoop-install.ps1 -Source native   # Install natively
-```
-
-**Proxy mode**:
-- Downloads installer via `https://gh-proxy.org`
-- Configures `scoop_repo` with proxy
-- Adds `spc` bucket with proxy
-
----
-
-### scoop-resolve.ps1
-
-Updates bucket references in Scoop `install.json` files.
-
-**Parameters**:
-- `-To <bucket>`: Target bucket name (required)
-- `-From <bucket[]>`: Source buckets to replace (default: main, extras, versions, nirsoft, etc.)
-- `-DryRun`: Preview changes without writing
-
-**Usage**:
-```powershell
-.\scoop-resolve.ps1 -To spc                    # Resolve all to spc
-.\scoop-resolve.ps1 -To spc -DryRun            # Preview only
-.\scoop-resolve.ps1 -To spc -From main,extras  # Specific source buckets
-```
-
----
-
-### scoop-proxy.ps1
-
-Configures git proxy for Scoop bucket remotes.
-
-**Parameters**:
-- `-Bucket <bucket>`: Bucket name or `*` for all buckets (required)
-- `-Url <proxy>`: Proxy URL to prepend (required)
-- `-Reset`: Remove proxy, reset to original URL
-- `-DryRun`: Preview changes without writing
-
-**Usage**:
-```powershell
-.\scoop-proxy.ps1 -Bucket main -Url https://gh-proxy.org     # Set proxy
-.\scoop-proxy.ps1 -Bucket main -Reset                        # Remove proxy
-.\scoop-proxy.ps1 -Bucket * -Url https://gh-proxy.org -DryRun  # Preview all
-```
+**Trigger providers** let you specify *what to trigger*. These are explicitly named because they are NOT idempotent - users understand that triggering activation twice may have different effects than triggering once.
 
 ---
 
 ## Installation
 
-### Clone Entire Repository
+### Prerequisites
+
+- Windows 10/11
+- PowerShell 5.1 or PowerShell 7+
+- Administrator privileges (for most operations)
+
+### Install via Scoop (Recommended)
 
 ```powershell
-git clone https://github.com/lvyuemeng/SysKit-Win.git
+# Add the bucket
+scoop bucket add winspec https://github.com/lvyuemeng/winspec
+
+# Install WinSpec
+scoop install winspec
+
+# Verify installation
+winspec help
 ```
 
-### Download Individual Script
+To update WinSpec:
 
 ```powershell
-irm https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/office.ps1 -OutFile office.ps1
+scoop update winspec
 ```
 
-### Set Execution Policy
+### Install from Source
 
-If scripts fail to run, set the execution policy:
+1. Clone the repository:
+   ```powershell
+   git clone https://github.com/lvyuemeng/winspec.git
+   cd winspec
+   ```
+
+2. (Optional) Run tests to verify installation:
+   ```powershell
+   .\winspec\tests\run-tests.ps1
+   ```
+
+3. Start using WinSpec:
+   ```powershell
+   .\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
+   ```
+
+### One-liner Install
 
 ```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Clone and apply default spec
+git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
 ```
 
 ---
 
-## Mirror URLs
+## Usage
 
-All scripts are available from the following mirrors:
+### Quick Start
 
-| Platform | URL |
-|----------|-----|
-| GitHub | `https://github.com/lvyuemeng/SysKit-Win` |
-| Codeberg | `https://codeberg.org/nostalgia/SysKit-Win` |
-| Gitee | `https://gitee.com/nostalgiaLiquid/SysKit-Win` |
+```powershell
+# Apply a specification (declarative only, safe)
+.\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
 
-**Raw file URLs**:
-- GitHub: `https://raw.githubusercontent.com/lvyuemeng/SysKit-Win/master/<script>.ps1`
-- Codeberg: `https://codeberg.org/nostalgia/SysKit-Win/raw/branch/master/<script>.ps1`
-- Gitee: `https://gitee.com/nostalgiaLiquid/SysKit-Win/raw/main/<script>.ps1`
+# Apply with triggers (includes non-idempotent actions)
+.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -WithTriggers
+
+# Dry run (preview changes without applying)
+.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -DryRun
+
+# Show current system state
+.\winspec\winspec.ps1 status
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `apply` | Apply a specification file |
+| `trigger` | Execute a specific trigger |
+| `status` | Show current system state |
+| `rollback` | Rollback to a checkpoint |
+| `providers` | List available providers |
+| `validate` | Validate a spec without applying |
+| `help` | Show help message |
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-Spec` | Path to specification file |
+| `-DryRun` | Preview changes without applying |
+| `-Checkpoint` | Create restore point before applying |
+| `-WithTriggers` | Include trigger execution |
+
+### Specification Format
+
+```powershell
+# specs/developer.ps1
+@{
+    Name = "developer"
+    Description = "Developer workstation setup"
+    
+    # Import other specs (composition)
+    Import = @(
+        ".\specs\default.ps1"
+    )
+    
+    # === DECLARATIVE PROVIDERS (Idempotent) ===
+    
+    # Registry: fine-grained state management
+    Registry = @{
+        Clipboard = @{
+            EnableHistory = $true
+        }
+        Explorer = @{
+            ShowHidden = $true
+            ShowFileExt = $true
+        }
+        Theme = @{
+            AppTheme = "dark"
+        }
+    }
+    
+    # Package: ensure these are installed
+    Package = @{
+        Installed = @("git", "neovim", "nodejs", "python")
+    }
+    
+    # Windows Services
+    Service = @{
+        wuauserv = @{ State = "stopped"; Startup = "disabled" }
+    }
+    
+    # Windows Features
+    Feature = @{
+        "Microsoft-Windows-Subsystem-Linux" = "enabled"
+        "VirtualMachinePlatform" = "enabled"
+    }
+    
+    # === TRIGGERS (Non-Idempotent) ===
+    
+    # Explicit trigger section
+    Trigger = @{
+        Activation = $true           # Just run activation
+        Debloat = "silent"           # Run debloat with option
+        Office = "C:\Installers"     # Download Office to path
+    }
+}
+```
+
+### Examples
+
+```powershell
+# Apply with checkpoint (create restore point first)
+.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -Checkpoint
+
+# Run specific trigger
+.\winspec\winspec.ps1 trigger -Name activation
+.\winspec\winspec.ps1 trigger -Name debloat -Option "silent"
+
+# Rollback to last checkpoint
+.\winspec\winspec.ps1 rollback -Last
+
+# Validate a spec without applying
+.\winspec\winspec.ps1 validate -Spec .\winspec\specs\developer.ps1
+
+# List available providers
+.\winspec\winspec.ps1 providers
+```
+
+---
+
+## Security Notes
+
+Trigger providers download and execute remote scripts:
+
+- **Activation**: Downloads from `https://get.activated.win`
+- **Debloat**: Downloads from `https://debloat.raphi.re/`
+- **Office**: Downloads from Microsoft CDN
+
+These scripts require administrator privileges. Always review remote scripts before execution. Use `-DryRun` to preview actions without executing them.
 
 ---
 
 ## License
 
-MIT License - See [LICENSE-MIT](/LICENSE-MIT)
+See [LICENSE-MIT](LICENSE-MIT) for details.
+
+---
+
+## Contributing
+
+Contributions are welcome! Here's how to get started:
+
+### Development Setup
+
+1. Clone the repository
+2. Run tests to ensure everything works:
+   ```powershell
+   .\winspec\tests\run-tests.ps1
+   ```
+
+### Creating a New Provider
+
+1. Create a new file in `winspec/providers/` following the naming convention `{name}.psm1`
+2. Implement the required functions based on provider type:
+
+**Declarative Provider** (idempotent):
+```powershell
+function Get-ProviderInfo {
+    return @{ Name = "MyProvider"; Type = "Declarative" }
+}
+
+function Test-MyProviderState {
+    param ([hashtable]$Desired)
+    # Returns $true if in desired state
+}
+
+function Set-MyProviderState {
+    param ([hashtable]$Desired, [switch]$WhatIf)
+    # Apply desired state
+}
+```
+
+**Trigger Provider** (non-idempotent):
+```powershell
+function Get-ProviderInfo {
+    return @{ Name = "MyTrigger"; Type = "Trigger" }
+}
+
+function Invoke-MyTriggerTrigger {
+    param ($Option, [switch]$WhatIf)
+    # Execute trigger action
+}
+```
+
+3. Add tests in `winspec/tests/`
+4. Update documentation in [`docs/providers.md`](docs/providers.md)
+
+### Guidelines
+
+- Follow existing code style and naming conventions
+- Use the logging module for consistent output
+- Support `-WhatIf` for preview functionality
+- Return consistent result hashtables with `Status` key
+- Handle errors gracefully with meaningful messages
+
+### Running Tests
+
+```powershell
+# Run all tests
+.\winspec\tests\run-tests.ps1
+
+# Run specific test file
+Invoke-Pester .\winspec\tests\providers.Tests.ps1
+```
+
+---
+
+## Acknowledgments
+
+- [massgrave.dev](https://massgrave.dev) for activation scripts
+- [Win11Debloat](https://github.com/Raphire/Win11Debloat) for debloat script
+- [Scoop](https://scoop.sh) for package management
+
+---
+
+## Documentation
+
+- [Design Document](docs/design.md) - Architecture and design decisions
+- [Provider Guide](docs/providers.md) - How to develop custom providers
+- [Specification Guide](docs/spec.md) - Specification format and configuration options

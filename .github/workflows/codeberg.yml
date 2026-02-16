@@ -18,7 +18,7 @@ jobs:
 
       - uses: yesolutions/mirror-action@v0.7.0
         with:
-          REMOTE: 'ssh://git@codeberg.org/nostalgia/scoop-cn.git'
+          REMOTE: 'ssh://git@codeberg.org/nostalgia/winspec.git'
           GIT_SSH_PRIVATE_KEY: ${{ secrets.CODEBERG }}
           GIT_SSH_NO_VERIFY_HOST: "true"
           GIT_PUSH_ARGS: '--tags'

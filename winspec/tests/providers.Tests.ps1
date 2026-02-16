@@ -1,0 +1,302 @@
+# tests/providers.Tests.ps1 - Tests for provider modules with mocked system operations
+
+BeforeAll {
+    Import-Module "$PSScriptRoot\..\logging.psm1" -Force
+    Import-Module "$PSScriptRoot\..\schema.psm1" -Force
+    
+    # Mock all registry operations
+    Mock Get-ItemProperty { 
+        param($Path, $Name)
+        # Return mock registry values based on property name
+        switch ($Name) {
+            "Hidden" { return @{ Hidden = 1 } }
+            "HideFileExt" { return @{ HideFileExt = 0 } }
+            "EnableClipboardHistory" { return @{ EnableClipboardHistory = 1 } }
+            "AppsUseLightTheme" { return @{ AppsUseLightTheme = 0 } }
+            default { return @{ $Name = 1 } }
+        }
+    }
+    Mock Set-ItemProperty { }
+    Mock New-Item { return @{ FullName = "MockPath" } }
+    Mock Test-Path { return $true }
+    
+    # Mock service operations
+    Mock Get-Service { 
+        param($Name)
+        return [PSCustomObject]@{ 
+            Status = "Running"
+            Name = $Name
+        }
+    }
+    Mock Get-WmiObject { 
+        return [PSCustomObject]@{ StartMode = "Automatic" }
+    }
+    Mock Set-Service { }
+    Mock Start-Service { }
+    Mock Stop-Service { }
+    
+    # Mock Windows feature operations
+    Mock Get-WindowsOptionalFeature { 
+        param($FeatureName)
+        return [PSCustomObject]@{ 
+            State = "Enabled"
+            Name = $FeatureName
+        }
+    }
+    Mock Enable-WindowsOptionalFeature { }
+    Mock Disable-WindowsOptionalFeature { }
+    
+    # Mock Scoop/package operations
+    Mock Get-Command { 
+        param($Name)
+        if ($Name -eq "scoop") {
+            return [PSCustomObject]@{ Name = "scoop" }
+        }
+        return $null
+    }
+    Mock Invoke-RestMethod { return "mock script content" }
+    
+    # Import providers with prefixes to avoid naming conflicts
+    Import-Module "$PSScriptRoot\..\providers\registry.psm1" -Force -Prefix Registry
+    Import-Module "$PSScriptRoot\..\providers\service.psm1" -Force -Prefix Service
+    Import-Module "$PSScriptRoot\..\providers\feature.psm1" -Force -Prefix Feature
+    Import-Module "$PSScriptRoot\..\providers\package.psm1" -Force -Prefix Package
+}
+
+Describe "Registry Provider" {
+    Context "Get-ProviderInfo" {
+        It "Should return correct provider info" {
+            $info = Get-RegistryProviderInfo
+            $info.Name | Should -Be "Registry"
+            $info.Type | Should -Be "Declarative"
+        }
+    }
+    
+    Context "Get-RegistryValue" {
+        It "Should return registry value" {
+            $result = Get-RegistryGet-RegistryValue -Path "HKCU:\Test" -Property "TestProp" -Default 0
+            $result | Should -Not -BeNullOrEmpty
+        }
+        
+        It "Should return default when property not found" {
+            Mock Get-ItemProperty { throw "Property not found" }
+            
+            $result = Get-RegistryGet-RegistryValue -Path "HKCU:\Test" -Property "NonExistent" -Default "DefaultValue"
+            $result | Should -Be "DefaultValue"
+        }
+    }
+    
+    Context "Test-RegistryState" {
+        It "Should return true when in desired state" {
+            # Mock returns values that match desired state
+            $desired = @{
+                Explorer = @{ ShowHidden = $true }
+            }
+            
+            $result = Test-RegistryTest-RegistryState -Desired $desired
+            $result | Should -Be $true
+        }
+    }
+    
+    Context "Set-RegistryState" {
+        It "Should apply registry changes" {
+            $desired = @{
+                Explorer = @{ ShowHidden = $true }
+            }
+            
+            $result = Set-RegistrySet-RegistryState -Desired $desired
+            $result | Should -Not -BeNullOrEmpty
+        }
+        
+        It "Should handle WhatIf correctly" {
+            $desired = @{
+                Explorer = @{ ShowHidden = $false }
+            }
+            
+            # ShouldProcess will prevent actual changes
+            $result = Set-RegistrySet-RegistryState -Desired $desired -WhatIf
+            $result | Should -Not -BeNullOrEmpty
+        }
+    }
+}
+
+Describe "Service Provider" {
+    Context "Get-ProviderInfo" {
+        It "Should return correct provider info" {
+            $info = Get-ServiceProviderInfo
+            $info.Name | Should -Be "Service"
+            $info.Type | Should -Be "Declarative"
+        }
+    }
+    
+    Context "Get-ServiceState" {
+        It "Should return service state" {
+            $result = Get-ServiceGet-ServiceState -ServiceName "wuauserv"
+            $result | Should -Not -BeNullOrEmpty
+            $result.State | Should -Be "running"
+            $result.Startup | Should -Be "automatic"
+        }
+    }
+    
+    Context "Test-ServiceState" {
+        It "Should return true when in desired state" {
+            $desired = @{
+                "wuauserv" = @{ State = "running"; Startup = "automatic" }
+            }
+            
+            $result = Test-ServiceTest-ServiceState -Desired $desired
+            $result | Should -Be $true
+        }
+        
+        It "Should return false when not in desired state" {
+            $desired = @{
+                "wuauserv" = @{ State = "stopped" }
+            }
+            
+            $result = Test-ServiceTest-ServiceState -Desired $desired
+            $result | Should -Be $false
+        }
+    }
+    
+    Context "Set-ServiceState" {
+        It "Should apply service changes" {
+            $desired = @{
+                "wuauserv" = @{ State = "stopped"; Startup = "disabled" }
+            }
+            
+            $result = Set-ServiceSet-ServiceState -Desired $desired
+            $result | Should -Not -BeNullOrEmpty
+        }
+    }
+}
+
+Describe "Feature Provider" {
+    Context "Get-ProviderInfo" {
+        It "Should return correct provider info" {
+            $info = Get-FeatureProviderInfo
+            $info.Name | Should -Be "Feature"
+            $info.Type | Should -Be "Declarative"
+        }
+    }
+    
+    Context "Get-FeatureState" {
+        It "Should return feature state" {
+            $result = Get-FeatureGet-FeatureState -FeatureName "Microsoft-Windows-Subsystem-Linux"
+            $result | Should -Be "Enabled"
+        }
+    }
+    
+    Context "Test-FeatureState" {
+        It "Should return true when in desired state" {
+            $desired = @{
+                "Microsoft-Windows-Subsystem-Linux" = "enabled"
+            }
+            
+            $result = Test-FeatureTest-FeatureState -Desired $desired
+            $result | Should -Be $true
+        }
+        
+        It "Should return false when not in desired state" {
+            $desired = @{
+                "Microsoft-Windows-Subsystem-Linux" = "disabled"
+            }
+            
+            $result = Test-FeatureTest-FeatureState -Desired $desired
+            $result | Should -Be $false
+        }
+    }
+    
+    Context "Set-FeatureState" {
+        It "Should apply feature changes" {
+            $desired = @{
+                "VirtualMachinePlatform" = "enabled"
+            }
+            
+            $result = Set-FeatureSet-FeatureState -Desired $desired
+            $result | Should -Not -BeNullOrEmpty
+        }
+    }
+}
+
+Describe "Package Provider" {
+    Context "Get-ProviderInfo" {
+        It "Should return correct provider info" {
+            $info = Get-PackageProviderInfo
+            $info.Name | Should -Be "Package"
+            $info.Type | Should -Be "Declarative"
+        }
+    }
+    
+    Context "Get-PackageState" {
+        It "Should return installed packages" {
+            Mock Get-Package { 
+                return @(
+                    [PSCustomObject]@{ Name = "git" },
+                    [PSCustomObject]@{ Name = "neovim" }
+                )
+            }
+            
+            $result = Get-PackageGet-PackageState
+            $result | Should -Not -BeNullOrEmpty
+        }
+    }
+    
+    Context "Test-PackageState" {
+        It "Should return true when all packages installed" {
+            Mock Get-Package { 
+                return @(
+                    [PSCustomObject]@{ Name = "git" },
+                    [PSCustomObject]@{ Name = "neovim" }
+                )
+            }
+            
+            $desired = @{
+                Installed = @("git", "neovim")
+            }
+            
+            $result = Test-PackageTest-PackageState -Desired $desired
+            $result | Should -Be $true
+        }
+        
+        It "Should return false when packages missing" {
+            Mock Get-Package { 
+                return @([PSCustomObject]@{ Name = "git" })
+            }
+            
+            $desired = @{
+                Installed = @("git", "neovim", "nodejs")
+            }
+            
+            $result = Test-PackageTest-PackageState -Desired $desired
+            $result | Should -Be $false
+        }
+    }
+    
+    Context "Set-PackageState" {
+        It "Should install missing packages" {
+            Mock Get-Package { 
+                return @([PSCustomObject]@{ Name = "git" })
+            }
+            Mock Invoke-Expression { }
+            Mock Start-Process { return @{ ExitCode = 0 } }
+            
+            $desired = @{
+                Installed = @("git", "neovim")
+            }
+            
+            $result = Set-PackageSet-PackageState -Desired $desired
+            $result | Should -Not -BeNullOrEmpty
+        }
+        
+        It "Should handle WhatIf correctly" {
+            Mock Get-Package { return @() }
+            
+            $desired = @{
+                Installed = @("git")
+            }
+            
+            $result = Set-PackageSet-PackageState -Desired $desired -WhatIf
+            $result | Should -Not -BeNullOrEmpty
+        }
+    }
+}

@@ -1,0 +1,25 @@
+# WinSpec .gitignore
+
+# PowerShell
+*.psm1-imported
+*.psd1
+
+# Logs
+*.log
+*.xml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.tmp
+*.temp
+*.bak
+
+# Installer cache
+Officesetup.exe
