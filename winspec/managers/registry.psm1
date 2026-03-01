@@ -85,7 +85,7 @@ function Test-RegistryState {
         [hashtable]$Desired
     )
     
-    $registryMap = Get-RegistryMap
+    $registryMap = Get-RegistryMaps
     $allInDesiredState = $true
     
     foreach ($category in $Desired.Keys) {
@@ -130,7 +130,7 @@ function Set-RegistryState {
     )
     
     $results = @{}
-    $registryMap = Get-RegistryMap
+    $registryMap = Get-RegistryMaps
     
     foreach ($category in $Desired.Keys) {
         $catConfig = $registryMap[$category]

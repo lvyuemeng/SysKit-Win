@@ -2,7 +2,7 @@
 # winspec.ps1 - CLI entry point for WinSpec
 # A composable, declarative Windows configuration system
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = "Default")]
 param (
     [Parameter(Position = 0)]
     [ValidateSet("apply", "trigger", "status", "rollback", "providers", "validate", "help")]
@@ -30,7 +30,10 @@ param (
     [int]$SequenceNumber,
     
     [Parameter(ParameterSetName = "Rollback")]
-    [switch]$Last
+    [switch]$Last,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -74,6 +77,9 @@ ROLLBACK OPTIONS:
     -SequenceNumber Restore point sequence number
     -Last           Rollback to most recent WinSpec checkpoint
 
+GLOBAL OPTIONS:
+    -ConfigPath     Path to configuration directory (for user providers/triggers)
+
 EXAMPLES:
     # Apply a specification (declarative only)
     .\winspec.ps1 apply -Spec .\specs\developer.ps1
@@ -104,27 +110,57 @@ EXAMPLES:
 }
 
 function Show-Providers {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigPath
+    )
+    
+    # Resolve config location if not provided
+    if (-not $ConfigPath) {
+        $ConfigPath = Resolve-ConfigLocation
+    }
+    
     Write-Host ""
     Write-Host "Available Providers" -ForegroundColor Cyan
     Write-Host "===================" -ForegroundColor Cyan
     
+    # Discover declarative providers from managers/
     Write-Host ""
     Write-Host "Declarative (Idempotent):" -ForegroundColor Yellow
-    Write-Host "  Registry  - Windows registry settings"
-    Write-Host "  Package   - Package management (Scoop)"
-    Write-Host "  Service   - Windows services"
-    Write-Host "  Feature   - Windows optional features"
     
+    # Built-in managers
+    $managersPath = Join-Path $Script:WinspecRoot "managers"
+    Discover-ProvidersFromPath -Path $managersPath -Type "Declarative" -IsUserProvider $false
+    
+    # User managers from config
+    if ($ConfigPath) {
+        $userManagersPath = Join-Path $ConfigPath "managers"
+        Discover-ProvidersFromPath -Path $userManagersPath -Type "Declarative" -IsUserProvider $true
+    }
+    
+    # Discover trigger providers from triggers/
     Write-Host ""
     Write-Host "Trigger (Non-Idempotent):" -ForegroundColor Yellow
-    Write-Host "  Activation - Windows/Office activation"
-    Write-Host "  Debloat    - System debloating"
-    Write-Host "  Office     - Office deployment"
+    
+    # Built-in triggers
+    $triggersPath = Join-Path $Script:WinspecRoot "triggers"
+    Discover-ProvidersFromPath -Path $triggersPath -Type "Trigger" -IsUserProvider $false
+    
+    # User triggers from config
+    if ($ConfigPath) {
+        $userTriggersPath = Join-Path $ConfigPath "triggers"
+        Discover-ProvidersFromPath -Path $userTriggersPath -Type "Trigger" -IsUserProvider $true
+    }
+    
     Write-Host ""
 }
 
 function Invoke-Validate {
-    param ([string]$SpecPath)
+    param (
+        [string]$SpecPath,
+        [string]$ConfigPath
+    )
     
     if (-not $SpecPath) {
         Write-Log -Level "ERROR" -Message "Specification path required: -Spec <path>"
@@ -152,7 +188,8 @@ function Invoke-Validate {
 function Invoke-TriggerCommand {
     param (
         [string]$TriggerName,
-        $TriggerOption
+        $TriggerOption,
+        [string]$ConfigPath
     )
     
     if (-not $TriggerName) {
@@ -161,8 +198,8 @@ function Invoke-TriggerCommand {
         return
     }
     
-    $triggerConfig = @{ $TriggerName = $TriggerOption }
-    $results = Invoke-Triggers -TriggerConfig $triggerConfig
+    $triggerConfig = @(@{ Name = $TriggerName; Value = $TriggerOption })
+    $results = Invoke-Triggers -TriggerConfig $triggerConfig -ConfigPath $ConfigPath
     Write-Report -Results $results
 }
 
@@ -174,7 +211,7 @@ switch ($Command) {
             exit 1
         }
         
-        $result = Invoke-WinSpec -Spec $Spec -DryRun:$DryRun -Checkpoint:$Checkpoint -WithTriggers:$WithTriggers
+        $result = Invoke-WinSpec -Spec $Spec -ConfigPath $ConfigPath -DryRun:$DryRun -Checkpoint:$Checkpoint -WithTriggers:$WithTriggers
         
         if (-not $result.Success) {
             exit 1
@@ -182,7 +219,7 @@ switch ($Command) {
     }
     
     "trigger" {
-        Invoke-TriggerCommand -TriggerName $Name -TriggerOption $Option
+        Invoke-TriggerCommand -TriggerName $Name -TriggerOption $Option -ConfigPath $ConfigPath
     }
     
     "status" {
@@ -199,7 +236,7 @@ switch ($Command) {
     }
     
     "providers" {
-        Show-Providers
+        Show-Providers -ConfigPath $ConfigPath
     }
     
     "validate" {
@@ -208,7 +245,7 @@ switch ($Command) {
             exit 1
         }
         
-        $valid = Invoke-Validate -SpecPath $Spec
+        $valid = Invoke-Validate -SpecPath $Spec -ConfigPath $ConfigPath
         if (-not $valid) { exit 1 }
     }
     

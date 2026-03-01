@@ -56,17 +56,17 @@ BeforeAll {
     }
     Mock Invoke-RestMethod { return "mock script content" }
     
-    # Import providers with prefixes to avoid naming conflicts
-    Import-Module "$PSScriptRoot\..\providers\registry.psm1" -Force -Prefix Registry
-    Import-Module "$PSScriptRoot\..\providers\service.psm1" -Force -Prefix Service
-    Import-Module "$PSScriptRoot\..\providers\feature.psm1" -Force -Prefix Feature
-    Import-Module "$PSScriptRoot\..\providers\package.psm1" -Force -Prefix Package
+    # Import managers (declarative providers)
+    Import-Module "$PSScriptRoot\..\managers\registry.psm1" -Force
+    Import-Module "$PSScriptRoot\..\managers\service.psm1" -Force
+    Import-Module "$PSScriptRoot\..\managers\feature.psm1" -Force
+    Import-Module "$PSScriptRoot\..\managers\package.psm1" -Force
 }
 
 Describe "Registry Provider" {
     Context "Get-ProviderInfo" {
         It "Should return correct provider info" {
-            $info = Get-RegistryProviderInfo
+            $info = registry\Get-ProviderInfo
             $info.Name | Should -Be "Registry"
             $info.Type | Should -Be "Declarative"
         }
@@ -74,14 +74,14 @@ Describe "Registry Provider" {
     
     Context "Get-RegistryValue" {
         It "Should return registry value" {
-            $result = Get-RegistryGet-RegistryValue -Path "HKCU:\Test" -Property "TestProp" -Default 0
+            $result = Get-RegistryValue -Path "HKCU:\Test" -Property "TestProp" -Default 0
             $result | Should -Not -BeNullOrEmpty
         }
         
         It "Should return default when property not found" {
             Mock Get-ItemProperty { throw "Property not found" }
             
-            $result = Get-RegistryGet-RegistryValue -Path "HKCU:\Test" -Property "NonExistent" -Default "DefaultValue"
+            $result = Get-RegistryValue -Path "HKCU:\Test" -Property "NonExistent" -Default "DefaultValue"
             $result | Should -Be "DefaultValue"
         }
     }
@@ -93,7 +93,7 @@ Describe "Registry Provider" {
                 Explorer = @{ ShowHidden = $true }
             }
             
-            $result = Test-RegistryTest-RegistryState -Desired $desired
+            $result = Test-RegistryState -Desired $desired
             $result | Should -Be $true
         }
     }
@@ -104,7 +104,7 @@ Describe "Registry Provider" {
                 Explorer = @{ ShowHidden = $true }
             }
             
-            $result = Set-RegistrySet-RegistryState -Desired $desired
+            $result = Set-RegistryState -Desired $desired
             $result | Should -Not -BeNullOrEmpty
         }
         
@@ -114,7 +114,7 @@ Describe "Registry Provider" {
             }
             
             # ShouldProcess will prevent actual changes
-            $result = Set-RegistrySet-RegistryState -Desired $desired -WhatIf
+            $result = Set-RegistryState -Desired $desired -WhatIf
             $result | Should -Not -BeNullOrEmpty
         }
     }
@@ -123,7 +123,7 @@ Describe "Registry Provider" {
 Describe "Service Provider" {
     Context "Get-ProviderInfo" {
         It "Should return correct provider info" {
-            $info = Get-ServiceProviderInfo
+            $info = service\Get-ProviderInfo
             $info.Name | Should -Be "Service"
             $info.Type | Should -Be "Declarative"
         }
@@ -131,7 +131,7 @@ Describe "Service Provider" {
     
     Context "Get-ServiceState" {
         It "Should return service state" {
-            $result = Get-ServiceGet-ServiceState -ServiceName "wuauserv"
+            $result = Get-ServiceState -ServiceName "wuauserv"
             $result | Should -Not -BeNullOrEmpty
             $result.State | Should -Be "running"
             $result.Startup | Should -Be "automatic"
@@ -144,7 +144,7 @@ Describe "Service Provider" {
                 "wuauserv" = @{ State = "running"; Startup = "automatic" }
             }
             
-            $result = Test-ServiceTest-ServiceState -Desired $desired
+            $result = Test-ServiceState -Desired $desired
             $result | Should -Be $true
         }
         
@@ -153,7 +153,7 @@ Describe "Service Provider" {
                 "wuauserv" = @{ State = "stopped" }
             }
             
-            $result = Test-ServiceTest-ServiceState -Desired $desired
+            $result = Test-ServiceState -Desired $desired
             $result | Should -Be $false
         }
     }
@@ -164,7 +164,7 @@ Describe "Service Provider" {
                 "wuauserv" = @{ State = "stopped"; Startup = "disabled" }
             }
             
-            $result = Set-ServiceSet-ServiceState -Desired $desired
+            $result = Set-ServiceState -Desired $desired
             $result | Should -Not -BeNullOrEmpty
         }
     }
@@ -173,7 +173,7 @@ Describe "Service Provider" {
 Describe "Feature Provider" {
     Context "Get-ProviderInfo" {
         It "Should return correct provider info" {
-            $info = Get-FeatureProviderInfo
+            $info = feature\Get-ProviderInfo
             $info.Name | Should -Be "Feature"
             $info.Type | Should -Be "Declarative"
         }
@@ -181,7 +181,7 @@ Describe "Feature Provider" {
     
     Context "Get-FeatureState" {
         It "Should return feature state" {
-            $result = Get-FeatureGet-FeatureState -FeatureName "Microsoft-Windows-Subsystem-Linux"
+            $result = Get-FeatureState -FeatureName "Microsoft-Windows-Subsystem-Linux"
             $result | Should -Be "Enabled"
         }
     }
@@ -192,7 +192,7 @@ Describe "Feature Provider" {
                 "Microsoft-Windows-Subsystem-Linux" = "enabled"
             }
             
-            $result = Test-FeatureTest-FeatureState -Desired $desired
+            $result = Test-FeatureState -Desired $desired
             $result | Should -Be $true
         }
         
@@ -201,7 +201,7 @@ Describe "Feature Provider" {
                 "Microsoft-Windows-Subsystem-Linux" = "disabled"
             }
             
-            $result = Test-FeatureTest-FeatureState -Desired $desired
+            $result = Test-FeatureState -Desired $desired
             $result | Should -Be $false
         }
     }
@@ -212,7 +212,7 @@ Describe "Feature Provider" {
                 "VirtualMachinePlatform" = "enabled"
             }
             
-            $result = Set-FeatureSet-FeatureState -Desired $desired
+            $result = Set-FeatureState -Desired $desired
             $result | Should -Not -BeNullOrEmpty
         }
     }
@@ -221,7 +221,7 @@ Describe "Feature Provider" {
 Describe "Package Provider" {
     Context "Get-ProviderInfo" {
         It "Should return correct provider info" {
-            $info = Get-PackageProviderInfo
+            $info = package\Get-ProviderInfo
             $info.Name | Should -Be "Package"
             $info.Type | Should -Be "Declarative"
         }
@@ -236,7 +236,7 @@ Describe "Package Provider" {
                 )
             }
             
-            $result = Get-PackageGet-PackageState
+            $result = Get-InstalledPackages
             $result | Should -Not -BeNullOrEmpty
         }
     }
@@ -254,7 +254,7 @@ Describe "Package Provider" {
                 Installed = @("git", "neovim")
             }
             
-            $result = Test-PackageTest-PackageState -Desired $desired
+            $result = Test-PackageState -Desired $desired
             $result | Should -Be $true
         }
         
@@ -267,7 +267,7 @@ Describe "Package Provider" {
                 Installed = @("git", "neovim", "nodejs")
             }
             
-            $result = Test-PackageTest-PackageState -Desired $desired
+            $result = Test-PackageState -Desired $desired
             $result | Should -Be $false
         }
     }
@@ -284,7 +284,7 @@ Describe "Package Provider" {
                 Installed = @("git", "neovim")
             }
             
-            $result = Set-PackageSet-PackageState -Desired $desired
+            $result = Set-PackageState -Desired $desired
             $result | Should -Not -BeNullOrEmpty
         }
         
@@ -295,7 +295,7 @@ Describe "Package Provider" {
                 Installed = @("git")
             }
             
-            $result = Set-PackageSet-PackageState -Desired $desired -WhatIf
+            $result = Set-PackageState -Desired $desired -WhatIf
             $result | Should -Not -BeNullOrEmpty
         }
     }

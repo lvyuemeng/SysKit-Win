@@ -41,10 +41,10 @@ Managing Windows configuration has traditionally been fragmented across multiple
 
 WinSpec distinguishes between two types of providers:
 
-| Type | Characteristics | Idempotent | Examples |
-|------|-----------------|------------|----------|
-| **Declarative** | State-based, testable | Yes | Registry, Service, Feature, Package |
-| **Trigger** | Action-based, fire-and-forget | No | Activation, Debloat, Office |
+| Type | Location | Characteristics | Idempotent | Examples |
+|------|----------|-----------------|------------|----------|
+| **Declarative** | `managers/` | State-based, testable | Yes | Registry, Service, Feature, Package |
+| **Trigger** | `triggers/` | Action-based, fire-and-forget | No | Activation, Debloat, Office |
 
 **Declarative providers** let you specify *what state* you want. Running multiple times produces the same result - the engine tests current state, calculates diff, and applies only needed changes.
 
@@ -94,15 +94,8 @@ scoop update winspec
 
 3. Start using WinSpec:
    ```powershell
-   .\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
+   .\winspec\winspec.ps1 help
    ```
-
-### One-liner Install
-
-```powershell
-# Clone and apply default spec
-git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
-```
 
 ---
 
@@ -110,15 +103,37 @@ git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply 
 
 ### Quick Start
 
+Create a configuration file (e.g., `myconfig.ps1`):
+
+```powershell
+@{
+    Name = "myconfig"
+    Description = "My Windows configuration"
+    
+    Registry = @{
+        Explorer = @{
+            ShowHidden = $true
+            ShowFileExt = $true
+        }
+    }
+    
+    Package = @{
+        Installed = @("git", "neovim")
+    }
+}
+```
+
+Apply the configuration:
+
 ```powershell
 # Apply a specification (declarative only, safe)
-.\winspec\winspec.ps1 apply -Spec .\winspec\specs\default.ps1
-
-# Apply with triggers (includes non-idempotent actions)
-.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -WithTriggers
+.\winspec\winspec.ps1 apply -Spec .\myconfig.ps1
 
 # Dry run (preview changes without applying)
-.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -DryRun
+.\winspec\winspec.ps1 apply -Spec .\myconfig.ps1 -DryRun
+
+# Apply with checkpoint (create restore point first)
+.\winspec\winspec.ps1 apply -Spec .\myconfig.ps1 -Checkpoint
 
 # Show current system state
 .\winspec\winspec.ps1 status
@@ -148,14 +163,14 @@ git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply 
 ### Specification Format
 
 ```powershell
-# specs/developer.ps1
+# myconfig.ps1
 @{
-    Name = "developer"
-    Description = "Developer workstation setup"
+    Name = "myconfig"
+    Description = "My Windows configuration"
     
     # Import other specs (composition)
     Import = @(
-        ".\specs\default.ps1"
+        ".\base-config.ps1"
     )
     
     # === DECLARATIVE PROVIDERS (Idempotent) ===
@@ -171,6 +186,10 @@ git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply 
         }
         Theme = @{
             AppTheme = "dark"
+            SystemTheme = "dark"
+        }
+        Desktop = @{
+            MenuShowDelay = "0"
         }
     }
     
@@ -192,20 +211,23 @@ git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply 
     
     # === TRIGGERS (Non-Idempotent) ===
     
-    # Explicit trigger section
-    Trigger = @{
-        Activation = $true           # Just run activation
-        Debloat = "silent"           # Run debloat with option
-        Office = "C:\Installers"     # Download Office to path
-    }
+    # Array of triggers to execute
+    Trigger = @(
+        @{ Name = "Activation" }                          # Run activation
+        @{ Name = "Debloat"; Value = "silent" }           # Run debloat with option
+        @{ Name = "Office"; Value = "C:\Installers" }      # Download Office to path
+    )
 }
 ```
 
 ### Examples
 
 ```powershell
+# Apply with triggers (includes non-idempotent actions)
+.\winspec\winspec.ps1 apply -Spec .\myconfig.ps1 -WithTriggers
+
 # Apply with checkpoint (create restore point first)
-.\winspec\winspec.ps1 apply -Spec .\winspec\specs\developer.ps1 -Checkpoint
+.\winspec\winspec.ps1 apply -Spec .\myconfig.ps1 -Checkpoint
 
 # Run specific trigger
 .\winspec\winspec.ps1 trigger -Name activation
@@ -215,10 +237,39 @@ git clone https://github.com/lvyuemeng/winspec.git; .\winspec\winspec.ps1 apply 
 .\winspec\winspec.ps1 rollback -Last
 
 # Validate a spec without applying
-.\winspec\winspec.ps1 validate -Spec .\winspec\specs\developer.ps1
+.\winspec\winspec.ps1 validate -Spec .\myconfig.ps1
 
 # List available providers
 .\winspec\winspec.ps1 providers
+```
+
+---
+
+## Project Structure
+
+```
+winspec/
+├── winspec.ps1           # CLI entry point
+├── core.psm1             # Engine: resolve, plan, execute
+├── checkpoint.psm1       # Restore point management
+├── logging.psm1          # Unified logging
+├── schema.psm1           # Type definitions and validation
+├── registry-maps.ps1     # Registry configuration maps
+│
+├── managers/             # Declarative providers (idempotent)
+│   ├── registry.psm1     # Registry operations
+│   ├── service.psm1      # Windows services
+│   ├── feature.psm1      # Windows features
+│   └── package.psm1      # Package management (Scoop)
+│
+├── triggers/             # Trigger providers (non-idempotent)
+│   ├── activation.psm1   # Windows/Office activation
+│   ├── debloat.psm1      # System debloating
+│   └── office.psm1       # Office deployment
+│
+└── tests/                # Test suite
+    ├── *.Tests.ps1       # Pester test files
+    └── run-tests.ps1     # Test runner
 ```
 
 ---
@@ -253,15 +304,20 @@ Contributions are welcome! Here's how to get started:
    .\winspec\tests\run-tests.ps1
    ```
 
-### Creating a New Provider
+### Creating a New Declarative Provider
 
-1. Create a new file in `winspec/providers/` following the naming convention `{name}.psm1`
-2. Implement the required functions based on provider type:
+1. Create a new file in `winspec/managers/` following the naming convention `{name}.psm1`
+2. Implement the required functions:
 
-**Declarative Provider** (idempotent):
 ```powershell
+# managers/myprovider.psm1
+Import-Module (Join-Path $PSScriptRoot "..\logging.psm1") -Force
+
 function Get-ProviderInfo {
-    return @{ Name = "MyProvider"; Type = "Declarative" }
+    return @{ 
+        Name = "MyProvider"
+        Type = "Declarative" 
+    }
 }
 
 function Test-MyProviderState {
@@ -273,22 +329,36 @@ function Set-MyProviderState {
     param ([hashtable]$Desired, [switch]$WhatIf)
     # Apply desired state
 }
+
+Export-ModuleMember Get-ProviderInfo, Test-MyProviderState, Set-MyProviderState
 ```
 
-**Trigger Provider** (non-idempotent):
+### Creating a New Trigger Provider
+
+1. Create a new file in `winspec/triggers/` following the naming convention `{name}.psm1`
+2. Implement the required functions:
+
 ```powershell
+# triggers/mytrigger.psm1
+Import-Module (Join-Path $PSScriptRoot "..\logging.psm1") -Force
+
 function Get-ProviderInfo {
-    return @{ Name = "MyTrigger"; Type = "Trigger" }
+    return @{ 
+        Name = "MyTrigger"
+        Type = "Trigger" 
+    }
 }
 
 function Invoke-MyTriggerTrigger {
     param ($Option, [switch]$WhatIf)
     # Execute trigger action
 }
+
+Export-ModuleMember Get-ProviderInfo, Invoke-MyTriggerTrigger
 ```
 
 3. Add tests in `winspec/tests/`
-4. Update documentation in [`docs/providers.md`](docs/providers.md)
+4. Update documentation in [`docs/providers.md`](docs/spec.md)
 
 ### Guidelines
 
@@ -298,28 +368,13 @@ function Invoke-MyTriggerTrigger {
 - Return consistent result hashtables with `Status` key
 - Handle errors gracefully with meaningful messages
 
-### Running Tests
-
-```powershell
-# Run all tests
-.\winspec\tests\run-tests.ps1
-
-# Run specific test file
-Invoke-Pester .\winspec\tests\providers.Tests.ps1
-```
-
----
-
-## Acknowledgments
-
-- [massgrave.dev](https://massgrave.dev) for activation scripts
-- [Win11Debloat](https://github.com/Raphire/Win11Debloat) for debloat script
-- [Scoop](https://scoop.sh) for package management
-
 ---
 
 ## Documentation
 
-- [Design Document](docs/design.md) - Architecture and design decisions
-- [Provider Guide](docs/providers.md) - How to develop custom providers
-- [Specification Guide](docs/spec.md) - Specification format and configuration options
+- **[docs/design.md](docs/design.md)** - Architecture and design principles
+- **[docs/providers.md](docs/spec.md)** - Provider development guide
+
+---
+
+*WinSpec - Windows Configuration Made Simple*

@@ -1,5 +1,9 @@
 # schema.psm1 - Type definitions and validation for WinSpec
 
+# Import dependent modules
+Import-Module (Join-Path $PSScriptRoot "logging.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "registry-maps.ps1") -Force
+
 # Provider type enumeration
 enum ProviderType {
     Declarative
@@ -15,74 +19,7 @@ $Script:SpecSchema = @{
     Package     = @{ Type = "hashtable"; Required = $false }
     Service     = @{ Type = "hashtable"; Required = $false }
     Feature     = @{ Type = "hashtable"; Required = $false }
-    Trigger     = @{ Type = "hashtable"; Required = $false }
-}
-
-# Registry configuration maps
-$Script:RegistryMaps = @{
-    Clipboard = @{
-        Path = "HKCU:\Software\Microsoft\Clipboard"
-        Properties = @{
-            EnableHistory = @{ 
-                Name = "EnableClipboardHistory"
-                Type = "DWord"
-            }
-        }
-    }
-    
-    Explorer = @{
-        Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-        Properties = @{
-            ShowHidden = @{ 
-                Name    = "Hidden"
-                Type    = "DWord"
-                Map     = @{ $true = 1; $false = 2 }
-            }
-            ShowFileExt = @{ 
-                Name    = "HideFileExt"
-                Type    = "DWord"
-                Map     = @{ $true = 0; $false = 1 }
-            }
-        }
-    }
-    
-    Theme = @{
-        Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-        Properties = @{
-            AppTheme = @{ 
-                Name    = "AppsUseLightTheme"
-                Type    = "DWord"
-                Map     = @{ "light" = 1; "dark" = 0 }
-            }
-            SystemTheme = @{ 
-                Name    = "SystemUsesLightTheme"
-                Type    = "DWord"
-                Map     = @{ "light" = 1; "dark" = 0 }
-            }
-        }
-    }
-    
-    Desktop = @{
-        Path = "HKCU:\Control Panel\Desktop"
-        Properties = @{
-            MenuShowDelay = @{
-                Name = "MenuShowDelay"
-                Type = "String"
-            }
-        }
-    }
-}
-
-function Get-RegistryMap {
-    param (
-        [Parameter(Mandatory = $false)]
-        [string]$Category
-    )
-    
-    if ($Category) {
-        return $Script:RegistryMaps[$Category]
-    }
-    return $Script:RegistryMaps
+    Trigger     = @{ Type = "array"; Required = $false }
 }
 
 function Get-SpecSchema {
@@ -108,7 +45,8 @@ function Test-SpecSchema {
     
     # Validate Registry keys are known categories
     if ($Config.Registry) {
-        $validCategories = $Script:RegistryMaps.Keys
+        $registryMaps = Get-RegistryMaps
+        $validCategories = $registryMaps.Keys
         foreach ($category in $Config.Registry.Keys) {
             if ($category -notin $validCategories) {
                 $errors += "Unknown Registry category: '$category'. Valid: $($validCategories -join ', ')"
@@ -148,10 +86,20 @@ function Test-SpecSchema {
     
     # Validate Trigger structure
     if ($Config.Trigger) {
-        $validTriggers = @("Activation", "Debloat", "Office")
-        foreach ($trigger in $Config.Trigger.Keys) {
-            if ($trigger -notin $validTriggers) {
-                $errors += "Unknown Trigger: '$trigger'. Valid: $($validTriggers -join ', ')"
+        # Check if Trigger is an array
+        if ($Config.Trigger -isnot [array]) {
+            $errors += "Trigger must be an array of hashtables"
+        }
+        else {
+            foreach ($trigger in $Config.Trigger) {
+                # Check each trigger entry is a hashtable with Name field
+                if ($trigger -isnot [hashtable]) {
+                    $errors += "Each trigger entry must be a hashtable"
+                    continue
+                }
+                if (-not $trigger.Name) {
+                    $errors += "Each trigger entry must have a 'Name' field"
+                }
             }
         }
     }
@@ -193,7 +141,6 @@ function Get-ProviderInfo {
 }
 
 Export-ModuleMember -Function @(
-    "Get-RegistryMap"
     "Get-SpecSchema"
     "Test-SpecSchema"
     "Get-ProviderInfo"

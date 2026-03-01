@@ -180,3 +180,53 @@ Describe "Write-Report" {
         { Write-Report -Results $results } | Should -Not -Throw
     }
 }
+
+Describe "Resolve-ConfigLocation" {
+    It "Should return explicit ConfigPath when provided" {
+        Mock -ModuleName core Test-Path { return $true } -ParameterFilter { $Path -eq "C:\Test\Config" }
+        
+        $result = Resolve-ConfigLocation -ConfigPath "C:\Test\Config"
+        $result | Should -Be "C:\Test\Config"
+    }
+    
+    It "Should return null when no config location exists" {
+        Mock -ModuleName core Test-Path { return $false }
+        
+        $result = Resolve-ConfigLocation
+        $result | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Find-TriggerScript" {
+    It "Should return explicit path when provided" {
+        Mock -ModuleName core Test-Path { return $true } -ParameterFilter { $Path -eq ".\triggers\test.ps1" }
+        
+        $result = Find-TriggerScript -Name "test" -Path ".\triggers\test.ps1"
+        $result | Should -Be ".\triggers\test.ps1"
+    }
+    
+    It "Should return null when trigger not found" {
+        Mock -ModuleName core Test-Path { return $false }
+        
+        $result = Find-TriggerScript -Name "nonexistent"
+        $result | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Import-Manager" {
+    It "Should return null for non-existent manager" {
+        Mock Test-Path { return $false }
+        
+        $result = Import-Manager -Name "NonExistent"
+        $result | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Import-BuiltInTrigger" {
+    It "Should return null for non-existent trigger" {
+        Mock Test-Path { return $false }
+        
+        $result = Import-BuiltInTrigger -Name "NonExistent"
+        $result | Should -BeNullOrEmpty
+    }
+}

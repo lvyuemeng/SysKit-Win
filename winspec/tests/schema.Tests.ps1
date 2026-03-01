@@ -1,24 +1,25 @@
 # tests/schema.Tests.ps1 - Tests for schema module (no system changes)
 
 BeforeAll {
+    Import-Module "$PSScriptRoot\..\logging.psm1" -Force
     Import-Module "$PSScriptRoot\..\schema.psm1" -Force
 }
 
-Describe "Get-RegistryMap" {
+Describe "Get-RegistryMaps" {
     It "Should return registry maps" {
-        $maps = Get-RegistryMap
+        $maps = Get-RegistryMaps
         $maps | Should -Not -BeNullOrEmpty
     }
     
     It "Should contain expected categories" {
-        $maps = Get-RegistryMap
+        $maps = Get-RegistryMaps
         $maps.Keys | Should -Contain "Clipboard"
         $maps.Keys | Should -Contain "Explorer"
         $maps.Keys | Should -Contain "Theme"
     }
     
     It "Should return specific category when requested" {
-        $explorer = Get-RegistryMap -Category "Explorer"
+        $explorer = Get-RegistryMaps -Category "Explorer"
         $explorer | Should -Not -BeNullOrEmpty
         $explorer.Path | Should -Be "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
     }
@@ -109,26 +110,56 @@ Describe "Test-SpecSchema" {
         Test-SpecSchema -Config $validSpec | Should -Be $true
     }
     
-    It "Should reject unknown trigger" {
+    It "Should reject non-array trigger format" {
         $invalidSpec = @{
             Trigger = @{
-                "UnknownTrigger" = $true
+                Name = "Activation"
             }
         }
         
         Test-SpecSchema -Config $invalidSpec | Should -Be $false
     }
     
-    It "Should accept valid triggers" {
+    It "Should accept valid trigger array format" {
         $validSpec = @{
-            Trigger = @{
-                Activation = $true
-                Debloat = "silent"
-                Office = "C:\Installers"
-            }
+            Trigger = @(
+                @{ Name = "Activation" }
+                @{ Name = "Debloat"; Value = "silent" }
+                @{ Name = "Office"; Value = "C:\Installers" }
+            )
         }
         
         Test-SpecSchema -Config $validSpec | Should -Be $true
+    }
+    
+    It "Should accept triggers with Path field" {
+        $validSpec = @{
+            Trigger = @(
+                @{ Name = "my-trigger"; Path = ".\triggers\my-trigger.ps1" }
+            )
+        }
+        
+        Test-SpecSchema -Config $validSpec | Should -Be $true
+    }
+    
+    It "Should accept triggers with Enabled field" {
+        $validSpec = @{
+            Trigger = @(
+                @{ Name = "Activation"; Enabled = $false }
+            )
+        }
+        
+        Test-SpecSchema -Config $validSpec | Should -Be $true
+    }
+    
+    It "Should reject trigger entry without Name field" {
+        $invalidSpec = @{
+            Trigger = @(
+                @{ Value = "test" }  # Missing Name
+            )
+        }
+        
+        Test-SpecSchema -Config $invalidSpec | Should -Be $false
     }
 }
 

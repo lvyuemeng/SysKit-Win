@@ -19,16 +19,6 @@ function Invoke-ActivationTrigger {
     
     Write-Log -Level "INFO" -Message "Triggering Windows/Office activation..."
     
-    if ($PSCmdlet.ShouldProcess("Windows/Office", "Activate (Dry Run)")) {
-        # Actual execution happens below
-    } else {
-        Write-Log -Level "INFO" -Message "Would trigger Windows/Office activation (dry run)"
-        return @{
-            Status = "DryRun"
-            Message = "Would execute activation script"
-        }
-    }
-    
     # Build arguments based on option type
     $arguments = @()
     
@@ -72,10 +62,12 @@ function Invoke-ActivationTrigger {
             }
         }
     }
-    
-    return @{
-        Status = "Skipped"
-        Message = "User declined activation"
+    else {
+        Write-Log -Level "INFO" -Message "Would trigger Windows/Office activation (dry run)"
+        return @{
+            Status = "DryRun"
+            Message = "Would execute activation script"
+        }
     }
 }
 

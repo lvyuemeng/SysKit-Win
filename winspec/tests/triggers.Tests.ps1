@@ -12,9 +12,9 @@ BeforeAll {
     Mock Test-Path { return $true }
     
     # Import trigger providers with specific prefixes to avoid naming conflicts
-    Import-Module "$PSScriptRoot\..\providers\activation.psm1" -Force -Prefix Activation
-    Import-Module "$PSScriptRoot\..\providers\debloat.psm1" -Force -Prefix Debloat  
-    Import-Module "$PSScriptRoot\..\providers\office.psm1" -Force -Prefix Office
+    Import-Module "$PSScriptRoot\..\triggers\activation.psm1" -Force -Prefix Activation
+    Import-Module "$PSScriptRoot\..\triggers\debloat.psm1" -Force -Prefix Debloat  
+    Import-Module "$PSScriptRoot\..\triggers\office.psm1" -Force -Prefix Office
 }
 
 Describe "Activation Trigger Provider" {
@@ -31,7 +31,7 @@ Describe "Activation Trigger Provider" {
             $result = Invoke-ActivationActivationTrigger -Option $true -WhatIf
             
             $result.Status | Should -Be "DryRun"
-            $result.Message | Should -Match "dry run"
+            $result.Message | Should -Be "Would execute activation script"
         }
         
         It "Should accept boolean option" {
@@ -65,7 +65,7 @@ Describe "Debloat Trigger Provider" {
             $result = Invoke-DebloatDebloatTrigger -Option $true -WhatIf
             
             $result.Status | Should -Be "DryRun"
-            $result.Message | Should -Match "dry run"
+            $result.Message | Should -Be "Would execute debloat script"
         }
         
         It "Should accept string option" {
@@ -103,7 +103,7 @@ Describe "Office Trigger Provider" {
             $result = Invoke-OfficeOfficeTrigger -Option $true -WhatIf
             
             $result.Status | Should -Be "DryRun"
-            $result.Message | Should -Match "dry run"
+            $result.Message | Should -Be "Would download Office installer"
         }
         
         It "Should accept path string option" {

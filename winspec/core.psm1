@@ -117,40 +117,40 @@ function Test-Spec {
     return Test-SpecSchema -Config $Config
 }
 
-function Import-Provider {
+function Import-Manager {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
         [string]$Name
     )
     
-    $providerPath = Join-Path $Script:WinspecRoot "providers\$Name.psm1"
+    $managerPath = Join-Path $Script:WinspecRoot "managers\$Name.psm1"
     
-    if (-not (Test-Path $providerPath)) {
-        Write-Log -Level "ERROR" -Message "Provider not found: $Name"
+    if (-not (Test-Path $managerPath)) {
+        Write-Log -Level "ERROR" -Message "Manager not found: $Name"
         return $null
     }
     
     try {
-        Import-Module $providerPath -Force
-        Write-Log -Level "OK" -Message "Loaded provider: $Name"
+        Import-Module $managerPath -Force
+        Write-Log -Level "OK" -Message "Loaded manager: $Name"
         return $true
     }
     catch {
-        Write-Log -Level "ERROR" -Message "Failed to load provider: $Name"
+        Write-Log -Level "ERROR" -Message "Failed to load manager: $Name"
         Write-Log -Level "ERROR" -Message $_.Exception.Message
         return $null
     }
 }
 
+# Backward compatibility alias
+Set-Alias -Name Import-Provider -Value Import-Manager
+
 function Invoke-DeclarativeProviders {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true)]
-        [hashtable]$Config,
-        
-        [Parameter(Mandatory = $false)]
-        [switch]$WhatIf
+        [hashtable]$Config
     )
     
     $results = @{}
@@ -160,7 +160,7 @@ function Invoke-DeclarativeProviders {
         if ($Config.$providerName) {
             Write-LogSection -Name $providerName
             
-            if (Import-Provider -Name $providerName) {
+            if (Import-Manager -Name $providerName) {
                 $desired = $Config.$providerName
                 
                 # Get provider functions
@@ -200,44 +200,291 @@ function Invoke-DeclarativeProviders {
     return $results
 }
 
+# Helper function to get provider description
+function Get-ProviderDescription {
+    param([hashtable]$Info, [string]$Type)
+    if ($Info.Description) {
+        return $Info.Description
+    }
+    if ($Type -eq "Declarative") {
+        return "Configuration provider"
+    }
+    elseif ($Type -eq "Trigger") {
+        return "Action provider"
+    }
+    return "Provider"
+}
+
+# Helper function to discover providers from a path
+function Discover-ProvidersFromPath {
+    param(
+        [string]$Path,
+        [string]$Type,
+        [bool]$IsUserProvider = $false
+    )
+    if (-not (Test-Path $Path)) {
+        return
+    }
+    
+    $files = Get-ChildItem -Path $Path -Filter "*.psm1" -ErrorAction SilentlyContinue
+    foreach ($file in $files) {
+        $providerName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        try {
+            Import-Module $file.FullName -Force -ErrorAction SilentlyContinue
+            $info = Get-ProviderInfo -ErrorAction SilentlyContinue
+            if ($info -and $info.Name -and $info.Type) {
+                $description = Get-ProviderDescription -Info $info -Type $info.Type
+                $prefix = if ($IsUserProvider) { "[User] " } else { "" }
+                Write-Host "  $($prefix)$($info.Name)  - $description"
+            }
+        }
+        catch {
+            Write-Verbose "Failed to load provider $($file.Name): $_"
+        }
+    }
+}
+
+# Configuration Location Resolution
+function Resolve-ConfigLocation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigPath,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$SpecPath
+    )
+    
+    # 1. Explicit argument (highest priority)
+    if ($ConfigPath) {
+        if (Test-Path $ConfigPath) {
+            return $ConfigPath
+        }
+    }
+    
+    # 2. Environment variable
+    if ($env:WINSPEC_CONFIG -and (Test-Path $env:WINSPEC_CONFIG)) {
+        return $env:WINSPEC_CONFIG
+    }
+    
+    # 3. .config/winspec/ directory in user home
+    $userConfigPath = Join-Path $env:USERPROFILE ".config\winspec"
+    if (Test-Path $userConfigPath) {
+        return $userConfigPath
+    }
+    
+    # 4. .winspec.ps1 in current directory (default fallback)
+    $defaultPath = Join-Path $PWD ".winspec.ps1"
+    if (Test-Path $defaultPath) {
+        return $defaultPath
+    }
+    
+    return $null
+}
+
+# Find trigger script in multiple locations
+function Find-TriggerScript {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Path,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$SpecPath,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigPath
+    )
+    
+    # 1. Check for explicit path first
+    if ($Path) {
+        # Resolve relative to spec directory
+        if (-not [System.IO.Path]::IsPathRooted($Path) -and $SpecPath) {
+            $specDir = Split-Path $SpecPath -Parent
+            $Path = Join-Path $specDir $Path
+        }
+        
+        if (Test-Path $Path) {
+            return $Path
+        }
+    }
+    
+    # 2. Check for built-in trigger in winspec/triggers/
+    $builtinPath = Join-Path $Script:WinspecRoot "triggers\$Name.psm1"
+    if (Test-Path $builtinPath) {
+        return $builtinPath
+    }
+    
+    # 3. Check for trigger in spec directory (triggers/ subdirectory)
+    if ($SpecPath) {
+        $specDir = Split-Path $SpecPath -Parent
+        $specTriggerPath = Join-Path $specDir "triggers\$Name.ps1"
+        if (Test-Path $specTriggerPath) {
+            return $specTriggerPath
+        }
+    }
+    
+    # 4. Check for trigger in config directory (triggers/ subdirectory)
+    if ($ConfigPath) {
+        $configTriggerPath = Join-Path $ConfigPath "triggers\$Name.ps1"
+        if (Test-Path $configTriggerPath) {
+            return $configTriggerPath
+        }
+    }
+    
+    return $null
+}
+
+# Execute custom trigger script
+function Invoke-CustomTrigger {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath,
+        
+        [Parameter(Mandatory = $false)]
+        $Value = $true
+    )
+    
+    if (-not (Test-Path $ScriptPath)) {
+        return @{ Status = "Error"; Message = "Trigger script not found: $ScriptPath" }
+    }
+    
+    if ($WhatIf) {
+        Write-Log -Level "INFO" -Message "Would execute custom trigger: $ScriptPath"
+        return @{ Status = "DryRun"; ScriptPath = $ScriptPath }
+    }
+    
+    try {
+        Write-Log -Level "INFO" -Message "Executing custom trigger: $([System.IO.Path]::GetFileName($ScriptPath))"
+        
+        # Load and execute the script with parameters
+        $result = & $ScriptPath -Value $Value -WhatIf:$WhatIf
+        
+        if (-not $result) {
+            return @{ Status = "Success"; Message = "Custom trigger executed" }
+        }
+        
+        return $result
+    }
+    catch {
+        Write-Log -Level "ERROR" -Message "Custom trigger failed: $_"
+        return @{ Status = "Error"; Message = $_.Exception.Message }
+    }
+}
+
+# Import built-in trigger module
+function Import-BuiltInTrigger {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+    
+    $triggerPath = Join-Path $Script:WinspecRoot "triggers\$Name.psm1"
+    
+    if (-not (Test-Path $triggerPath)) {
+        return $null
+    }
+    
+    try {
+        Import-Module $triggerPath -Force
+        return $true
+    }
+    catch {
+        Write-Log -Level "ERROR" -Message "Failed to load trigger: $Name"
+        return $null
+    }
+}
+
 function Invoke-Triggers {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true)]
-        [hashtable]$TriggerConfig,
+        [array]$TriggerConfig,
         
         [Parameter(Mandatory = $false)]
-        [switch]$WhatIf
+        [string]$SpecPath,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigPath
     )
     
     $results = @{}
     
-    foreach ($triggerName in $TriggerConfig.Keys) {
+    foreach ($trigger in $TriggerConfig) {
+        # Validate trigger entry
+        if ($trigger -isnot [hashtable]) {
+            Write-Log -Level "ERROR" -Message "Invalid trigger entry: must be a hashtable"
+            continue
+        }
+        
+        # Check required Name field
+        if (-not $trigger.Name) {
+            Write-Log -Level "ERROR" -Message "Trigger entry missing required 'Name' field"
+            continue
+        }
+        
+        $triggerName = $trigger.Name
+        $triggerValue = if ($trigger.ContainsKey('Value')) { $trigger.Value } else { $true }
+        $triggerPath = $trigger.Path
+        $enabled = if ($trigger.ContainsKey('Enabled')) { $trigger.Enabled } else { $true }
+        
         Write-LogSection -Name "Trigger: $triggerName"
         
-        if (Import-Provider -Name $triggerName) {
-            $option = $TriggerConfig[$triggerName]
-            
-            $invokeTriggerCmd = Get-Command "Invoke-$($triggerName)Trigger" -ErrorAction SilentlyContinue
-            
-            if ($invokeTriggerCmd) {
-                if ($WhatIf) {
-                    Write-Log -Level "INFO" -Message "Would trigger $triggerName (dry run)"
-                    $results[$triggerName] = @{ Status = "DryRun"; Option = $option }
+        # Skip if disabled
+        if (-not $enabled) {
+            Write-Log -Level "INFO" -Message "Trigger '$triggerName' is disabled"
+            $results[$triggerName] = @{ Status = "Skipped"; Reason = "Disabled" }
+            continue
+        }
+        
+        # Find trigger script
+        $scriptPath = Find-TriggerScript -Name $triggerName -Path $triggerPath -SpecPath $SpecPath -ConfigPath $ConfigPath
+        
+        if ($scriptPath -and $scriptPath.EndsWith('.psm1')) {
+            # Built-in trigger
+            if (Import-BuiltInTrigger -Name $triggerName) {
+                $invokeTriggerCmd = Get-Command "Invoke-$($triggerName)Trigger" -ErrorAction SilentlyContinue
+                
+                if ($invokeTriggerCmd) {
+                    if ($WhatIf) {
+                        Write-Log -Level "INFO" -Message "Would trigger $triggerName (dry run)"
+                        $results[$triggerName] = @{ Status = "DryRun"; Value = $triggerValue }
+                    }
+                    else {
+                        if ($PSCmdlet.ShouldProcess($triggerName, "Execute trigger")) {
+                            $results[$triggerName] = & $invokeTriggerCmd -Option $triggerValue
+                        }
+                    }
                 }
                 else {
-                    if ($PSCmdlet.ShouldProcess($triggerName, "Execute trigger")) {
-                        $results[$triggerName] = & $invokeTriggerCmd -Option $option
-                    }
+                    Write-Log -Level "ERROR" -Message "Trigger $triggerName is missing Invoke-Trigger function"
+                    $results[$triggerName] = @{ Status = "Error"; Message = "Missing trigger function" }
                 }
             }
             else {
-                Write-Log -Level "ERROR" -Message "Trigger $triggerName is missing Invoke-Trigger function"
-                $results[$triggerName] = @{ Status = "Error"; Message = "Missing trigger function" }
+                $results[$triggerName] = @{ Status = "Error"; Message = "Failed to load trigger" }
+            }
+        }
+        elseif ($scriptPath -and $scriptPath.EndsWith('.ps1')) {
+            # Custom trigger script
+            if ($WhatIf) {
+                Write-Log -Level "INFO" -Message "Would execute custom trigger: $triggerName"
+                $results[$triggerName] = @{ Status = "DryRun"; Value = $triggerValue }
+            }
+            else {
+                if ($PSCmdlet.ShouldProcess($triggerName, "Execute custom trigger")) {
+                    $results[$triggerName] = Invoke-CustomTrigger -ScriptPath $scriptPath -Value $triggerValue -WhatIf:$WhatIf
+                }
             }
         }
         else {
-            $results[$triggerName] = @{ Status = "Error"; Message = "Failed to load trigger provider" }
+            Write-Log -Level "ERROR" -Message "Trigger '$triggerName' not found in any location"
+            $results[$triggerName] = @{ Status = "Error"; Message = "Trigger not found" }
         }
     }
     
@@ -282,6 +529,9 @@ function Invoke-WinSpec {
         [string]$Spec,
         
         [Parameter(Mandatory = $false)]
+        [string]$ConfigPath,
+        
+        [Parameter(Mandatory = $false)]
         [switch]$DryRun,
         
         [Parameter(Mandatory = $false)]
@@ -311,7 +561,13 @@ function Invoke-WinSpec {
         return @{ Success = $false; Error = "Validation failed" }
     }
     
-    # 4. Create checkpoint if requested
+    # 4. Resolve configuration location
+    $configLocation = Resolve-ConfigLocation -ConfigPath $ConfigPath -SpecPath $Spec
+    if ($configLocation) {
+        Write-Log -Level "INFO" -Message "Using configuration location: $configLocation"
+    }
+    
+    # 5. Create checkpoint if requested
     if ($Checkpoint -and -not $DryRun) {
         $checkpointResult = New-Checkpoint -Name "WinSpec-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         if (-not $checkpointResult.Success) {
@@ -319,15 +575,19 @@ function Invoke-WinSpec {
         }
     }
     
-    # 5. Execute declarative providers (idempotent)
+    # 6. Execute declarative providers (idempotent)
     $results = Invoke-DeclarativeProviders -Config $resolved -WhatIf:$DryRun
     
-    # 6. Execute triggers if requested (non-idempotent)
+    # 7. Execute triggers if requested (non-idempotent)
     if ($WithTriggers -and $resolved.Trigger) {
-        $results.Triggers = Invoke-Triggers -TriggerConfig $resolved.Trigger -WhatIf:$DryRun
+        $results.Triggers = Invoke-Triggers `
+            -TriggerConfig $resolved.Trigger `
+            -SpecPath $Spec `
+            -ConfigPath $configLocation `
+            -WhatIf:$DryRun
     }
     
-    # 7. Report
+    # 8. Report
     Write-Report -Results $results
     
     $results.Success = $true
@@ -342,7 +602,7 @@ function Get-SystemStatus {
     
     # Registry status
     Write-LogSection -Name "Registry"
-    $registryMap = Get-RegistryMap
+    $registryMap = Get-RegistryMaps
     foreach ($category in $registryMap.Keys) {
         Write-Log -Level "INFO" -Message "Category: $category"
         $catConfig = $registryMap[$category]
@@ -383,10 +643,17 @@ Export-ModuleMember -Function @(
     "Resolve-Spec"
     "Merge-Hashtables"
     "Test-Spec"
-    "Import-Provider"
+    "Import-Manager"
+    "Import-Provider"  # Backward compatibility alias
+    "Import-BuiltInTrigger"
     "Invoke-DeclarativeProviders"
     "Invoke-Triggers"
+    "Invoke-CustomTrigger"
+    "Resolve-ConfigLocation"
+    "Find-TriggerScript"
     "Write-Report"
     "Invoke-WinSpec"
     "Get-SystemStatus"
+    "Get-ProviderDescription"
+    "Discover-ProvidersFromPath"
 )
